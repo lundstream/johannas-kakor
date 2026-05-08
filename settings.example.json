@@ -1,0 +1,16 @@
+{
+  "app_name": "bakery-labels",
+  "port": 3060,
+  "session_secret": "CHANGE_ME_TO_A_LONG_RANDOM_STRING",
+  "session_days": 30,
+  "magic_link_minutes": 15,
+  "base_url": "http://localhost:3050",
+  "resend_api_key": "",
+  "email_from": "Bakery Labels <noreply@example.com>",
+  "google": {
+    "enabled": false,
+    "client_id": "",
+    "client_secret": ""
+  },
+  "first_admin_email": ""
+}

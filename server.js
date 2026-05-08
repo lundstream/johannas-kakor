@@ -1,0 +1,310 @@
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
+
+import { settings } from './settings.js';
+import { queries } from './db.js';
+import {
+  authMiddleware,
+  requireAuth,
+  requireAdmin,
+  createSession,
+  destroySession,
+  setSessionCookie,
+  clearSessionCookie,
+  findOrCreateUser,
+  hashPassword,
+  verifyPassword,
+  issueMagicLink,
+  consumeMagicLink,
+} from './auth.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
+app.use(authMiddleware);
+
+// ---------- Public ----------
+
+/** Public site config: site_name, header_tagline, footer_text, primary_color, favicon, instagram_url. */
+app.get('/api/public/site', (_req, res) => {
+  const all = queries.getAllSettings.all();
+  const obj = Object.fromEntries(all.map((r) => [r.key, r.value]));
+  res.json({
+    site_name: obj.site_name || 'Bakery Labels',
+    header_tagline: obj.header_tagline || '',
+    footer_text: obj.footer_text || '',
+    favicon_data_url: obj.favicon_data_url || '',
+    primary_color: obj.primary_color || '#b08654',
+    instagram_url: obj.instagram_url || '',
+    default_locale: obj.default_locale || 'en',
+  });
+});
+
+// ---------- Auth ----------
+
+const emailSchema = z.string().trim().toLowerCase().email();
+
+app.post('/api/auth/magic/request', async (req, res) => {
+  const parsed = emailSchema.safeParse(req.body?.email);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_email' });
+  const email = parsed.data;
+  try {
+    await issueMagicLink(email);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('magic link error', e);
+    res.status(500).json({ error: 'send_failed' });
+  }
+});
+
+app.get('/api/auth/magic/verify', (req, res) => {
+  const token = String(req.query.token || '');
+  if (!token) return res.status(400).json({ error: 'missing_token' });
+  const user = consumeMagicLink(token);
+  if (!user) return res.status(400).json({ error: 'invalid_or_expired' });
+  const sid = createSession(user.id, req.headers['user-agent']);
+  setSessionCookie(res, sid);
+  // Redirect to root for browser flow.
+  res.redirect('/');
+});
+
+const credSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(8).max(200),
+});
+
+app.post('/api/auth/signup', async (req, res) => {
+  const parsed = credSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const { email, password } = parsed.data;
+  if (queries.findUserByEmail.get(email)) {
+    return res.status(409).json({ error: 'email_in_use' });
+  }
+  const user = findOrCreateUser(email);
+  const hash = await hashPassword(password);
+  queries.updateUserPassword.run(hash, user.id);
+  queries.updateUserLastLogin.run(Date.now(), user.id);
+  const sid = createSession(user.id, req.headers['user-agent']);
+  setSessionCookie(res, sid);
+  res.json({ ok: true, user: publicUser(user) });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const parsed = credSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const { email, password } = parsed.data;
+  const user = queries.findUserByEmail.get(email);
+  if (!user) return res.status(401).json({ error: 'invalid_credentials' });
+  const ok = await verifyPassword(password, user.password_hash);
+  if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
+  queries.updateUserLastLogin.run(Date.now(), user.id);
+  const sid = createSession(user.id, req.headers['user-agent']);
+  setSessionCookie(res, sid);
+  res.json({ ok: true, user: publicUser(user) });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  destroySession(req.sessionId);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
+  res.json({ user: publicUser(req.user) });
+});
+
+app.patch('/api/me', requireAuth, async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).max(80).optional(),
+    password: z.string().min(8).max(200).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  if (parsed.data.name !== undefined) queries.updateUserName.run(parsed.data.name, req.user.id);
+  if (parsed.data.password) {
+    const hash = await hashPassword(parsed.data.password);
+    queries.updateUserPassword.run(hash, req.user.id);
+  }
+  res.json({ ok: true });
+});
+
+function publicUser(u) {
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    created_at: u.created_at,
+    last_login_at: u.last_login_at,
+  };
+}
+
+// ---------- Per-user data ----------
+
+app.get('/api/me/label', requireAuth, (req, res) => {
+  const row = queries.getLabel.get(req.user.id);
+  if (!row) return res.json({ label: null, updated_at: null });
+  res.json({ label: JSON.parse(row.data), updated_at: row.updated_at });
+});
+
+app.put('/api/me/label', requireAuth, (req, res) => {
+  const data = req.body;
+  if (!data || typeof data !== 'object') return res.status(400).json({ error: 'invalid_body' });
+  queries.upsertLabel.run(req.user.id, JSON.stringify(data), Date.now());
+  res.json({ ok: true });
+});
+
+app.get('/api/me/templates', requireAuth, (req, res) => {
+  const rows = queries.listTemplates.all(req.user.id);
+  res.json({
+    templates: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      data: JSON.parse(r.data),
+      createdAt: r.created_at,
+    })),
+  });
+});
+
+app.post('/api/me/templates', requireAuth, (req, res) => {
+  const schema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(120),
+    data: z.any(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const { id, name, data } = parsed.data;
+  queries.createTemplate.run(id, req.user.id, name, JSON.stringify(data), Date.now());
+  res.json({ ok: true });
+});
+
+app.put('/api/me/templates/:id', requireAuth, (req, res) => {
+  const schema = z.object({ name: z.string().min(1).max(120), data: z.any() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  queries.updateTemplate.run(parsed.data.name, JSON.stringify(parsed.data.data), req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/me/templates/:id', requireAuth, (req, res) => {
+  queries.deleteTemplate.run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/me/custom-ingredients', requireAuth, (req, res) => {
+  const row = queries.getCustomIngredients.get(req.user.id);
+  res.json({ ingredients: row ? JSON.parse(row.data) : [] });
+});
+
+app.put('/api/me/custom-ingredients', requireAuth, (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'invalid_body' });
+  queries.upsertCustomIngredients.run(req.user.id, JSON.stringify(req.body), Date.now());
+  res.json({ ok: true });
+});
+
+// ---------- Admin ----------
+
+app.get('/api/admin/users', requireAdmin, (_req, res) => {
+  res.json({ users: queries.listUsers.all() });
+});
+
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+  const schema = z.object({
+    email: emailSchema,
+    name: z.string().min(1).max(80).optional(),
+    role: z.enum(['user', 'admin']).default('user'),
+    password: z.string().min(8).max(200).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const { email, name, role, password } = parsed.data;
+  if (queries.findUserByEmail.get(email)) return res.status(409).json({ error: 'email_in_use' });
+  const now = Date.now();
+  const passHash = password ? await hashPassword(password) : null;
+  const info = queries.createUser.run(email, passHash, name || null, role, null, now, null);
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).max(80).optional(),
+    role: z.enum(['user', 'admin']).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const id = Number(req.params.id);
+  if (parsed.data.name !== undefined) queries.updateUserName.run(parsed.data.name, id);
+  if (parsed.data.role !== undefined) {
+    // Prevent demoting the last admin.
+    if (parsed.data.role === 'user') {
+      const admins = queries.listUsers.all().filter((u) => u.role === 'admin');
+      if (admins.length === 1 && admins[0].id === id) {
+        return res.status(400).json({ error: 'last_admin' });
+      }
+    }
+    queries.updateUserRole.run(parsed.data.role, id);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.user.id) return res.status(400).json({ error: 'cannot_delete_self' });
+  const admins = queries.listUsers.all().filter((u) => u.role === 'admin');
+  const target = queries.findUserById.get(id);
+  if (target && target.role === 'admin' && admins.length === 1) {
+    return res.status(400).json({ error: 'last_admin' });
+  }
+  queries.deleteUser.run(id);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/settings', requireAdmin, (_req, res) => {
+  const all = queries.getAllSettings.all();
+  res.json({ settings: Object.fromEntries(all.map((r) => [r.key, r.value])) });
+});
+
+app.put('/api/admin/settings', requireAdmin, (req, res) => {
+  const schema = z.record(z.string(), z.string());
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  for (const [key, value] of Object.entries(parsed.data)) {
+    // Whitelist keys to prevent unknown writes.
+    if (
+      ![
+        'site_name',
+        'header_tagline',
+        'footer_text',
+        'favicon_data_url',
+        'primary_color',
+        'instagram_url',
+        'default_locale',
+      ].includes(key)
+    ) continue;
+    queries.setSetting.run(key, value);
+  }
+  res.json({ ok: true });
+});
+
+// ---------- Static (production only) ----------
+
+const DIST = path.join(__dirname, 'dist');
+import fs from 'node:fs';
+if (fs.existsSync(DIST)) {
+  app.use(express.static(DIST));
+  app.get('/*splat', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(DIST, 'index.html'));
+  });
+}
+
+const port = settings.port || 3060;
+app.listen(port, () => {
+  console.log(`[bakery-labels] API listening on :${port}`);
+});

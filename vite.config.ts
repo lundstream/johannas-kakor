@@ -8,6 +8,9 @@ export default defineConfig({
     host: true,
     strictPort: true,
     allowedHosts: ['kakor.lundstream.net', '.lundstream.net', 'localhost'],
+    proxy: {
+      '/api': 'http://localhost:3060',
+    },
   },
   preview: {
     port: 3050,
