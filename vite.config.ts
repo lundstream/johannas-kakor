@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3050,
     host: true,
     strictPort: true,
-    allowedHosts: ['kakor.lundstream.net', '.lundstream.net', 'localhost'],
+    allowedHosts: ['enkeletikett.se', '.enkeletikett.se', 'kakor.lundstream.net', '.lundstream.net', 'localhost'],
     proxy: {
       '/api': 'http://localhost:3060',
     },
@@ -16,6 +16,6 @@ export default defineConfig({
     port: 3050,
     host: true,
     strictPort: true,
-    allowedHosts: ['kakor.lundstream.net', '.lundstream.net', 'localhost'],
+    allowedHosts: ['enkeletikett.se', '.enkeletikett.se', 'kakor.lundstream.net', '.lundstream.net', 'localhost'],
   },
 });
