@@ -2,13 +2,13 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { api, type SiteConfig } from '../api';
 
 const FALLBACK: SiteConfig = {
-  site_name: 'Bakery Labels',
-  header_tagline: '',
+  site_name: 'Enkel Etikett',
+  header_tagline: 'Enkelt etikettsystem för ditt bageri',
   footer_text: '',
   favicon_data_url: '',
   primary_color: '#b08654',
   instagram_url: '',
-  default_locale: 'en',
+  default_locale: 'sv',
   free_mode_enabled: '0',
   free_mode_path: 'free',
 };

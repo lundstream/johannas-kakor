@@ -69,12 +69,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 /** Default app_settings — only inserted if not present. */
 const DEFAULT_SETTINGS = {
-  site_name: 'Bakery Labels',
-  header_tagline: 'Label system',
-  footer_text: 'Bakery Labels · A simple label designer for small bakeries',
+  site_name: 'Enkel Etikett',
+  header_tagline: 'Enkelt etikettsystem för ditt bageri',
+  footer_text: 'Enkel Etikett · Enkelt etikettsystem för små bagerier',
   favicon_data_url: '',
   primary_color: '#b08654',
-  instagram_url: 'https://www.instagram.com/johannaskakor',
+  instagram_url: '',
   default_locale: 'sv',
   free_mode_enabled: '0',
   free_mode_path: 'free',
@@ -82,6 +82,13 @@ const DEFAULT_SETTINGS = {
 
 const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings(key, value) VALUES (?, ?)');
 for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);
+
+// One-time migration: replace old default values with new brand
+const migrateSetting = db.prepare('UPDATE app_settings SET value = ? WHERE key = ? AND value = ?');
+migrateSetting.run('Enkel Etikett', 'site_name', 'Bakery Labels');
+migrateSetting.run('Enkelt etikettsystem för ditt bageri', 'header_tagline', 'Label system');
+migrateSetting.run('Enkel Etikett · Enkelt etikettsystem för små bagerier', 'footer_text', 'Bakery Labels · A simple label designer for small bakeries');
+migrateSetting.run('', 'instagram_url', 'https://www.instagram.com/johannaskakor');
 
 export default db;
 
