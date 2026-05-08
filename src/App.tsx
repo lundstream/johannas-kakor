@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { SiteConfigProvider, useSiteConfig } from './hooks/useSiteConfig';
+import { SiteConfigProvider, useSiteConfig, useSiteConfigLoaded } from './hooks/useSiteConfig';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import EditorPage from './pages/EditorPage';
@@ -38,6 +38,8 @@ function GuestOnly({ children }: { children: ReactNode }) {
 function FreeRoute() {
   const { slug } = useParams<{ slug: string }>();
   const cfg = useSiteConfig();
+  const loaded = useSiteConfigLoaded();
+  if (!loaded) return <Loading />;
   if (cfg.free_mode_enabled !== '1') return <Navigate to="/" replace />;
   if (slug !== (cfg.free_mode_path || 'free')) return <Navigate to="/" replace />;
   return <FreeEditorPage />;

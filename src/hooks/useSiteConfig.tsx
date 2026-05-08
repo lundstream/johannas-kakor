@@ -13,15 +13,16 @@ const FALLBACK: SiteConfig = {
   free_mode_path: 'free',
 };
 
-const Ctx = createContext<SiteConfig>(FALLBACK);
+type SiteConfigCtx = SiteConfig & { _loaded: boolean };
+const Ctx = createContext<SiteConfigCtx>({ ...FALLBACK, _loaded: false });
 
 export function SiteConfigProvider({ children }: { children: ReactNode }) {
-  const [cfg, setCfg] = useState<SiteConfig>(FALLBACK);
+  const [cfg, setCfg] = useState<SiteConfigCtx>({ ...FALLBACK, _loaded: false });
   useEffect(() => {
     void (async () => {
       try {
         const r = await api.get<SiteConfig>('/api/public/site');
-        setCfg(r);
+        setCfg({ ...r, _loaded: true });
         if (r.site_name) document.title = r.site_name;
         if (r.favicon_data_url) {
           let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -37,6 +38,7 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         console.error('site config load failed', e);
+        setCfg((c) => ({ ...c, _loaded: true }));
       }
     })();
   }, []);
@@ -45,4 +47,8 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
 
 export function useSiteConfig(): SiteConfig {
   return useContext(Ctx);
+}
+
+export function useSiteConfigLoaded(): boolean {
+  return useContext(Ctx)._loaded;
 }
