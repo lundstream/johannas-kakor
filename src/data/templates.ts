@@ -32,7 +32,7 @@ export function createBlankLabel(): LabelData {
     id: uuid(),
     productName: 'Kanelbulle',
     productDescription: '',
-    bakeryName: 'Johannas Kakor',
+    bakeryName: 'Ditt Bageri',
     weight: '85 g',
     price: '25 kr',
     bestBefore: '',
