@@ -89,7 +89,7 @@ export async function issueMagicLink(email) {
   const now = Date.now();
   queries.cleanupMagicTokens.run(now);
   queries.createMagicToken.run(token, email, now, now + MAGIC_MS);
-  const url = `${settings.base_url.replace(/\/$/, '')}/login/verify?token=${encodeURIComponent(token)}`;
+  const url = `${settings.base_url.replace(/\/$/, '')}/api/auth/magic/verify?token=${encodeURIComponent(token)}`;
   const minutes = settings.magic_link_minutes;
   await sendEmail({
     to: email,

@@ -1,9 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { SiteConfigProvider } from './hooks/useSiteConfig';
+import { SiteConfigProvider, useSiteConfig } from './hooks/useSiteConfig';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import EditorPage from './pages/EditorPage';
+import FreeEditorPage from './pages/FreeEditorPage';
 import type { ReactNode } from 'react';
 
 function Loading() {
@@ -33,6 +34,15 @@ function GuestOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Handles /:slug — renders free editor if slug matches free_mode_path and free mode is on. */
+function FreeRoute() {
+  const { slug } = useParams<{ slug: string }>();
+  const cfg = useSiteConfig();
+  if (cfg.free_mode_enabled !== '1') return <Navigate to="/" replace />;
+  if (slug !== (cfg.free_mode_path || 'free')) return <Navigate to="/" replace />;
+  return <FreeEditorPage />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -42,6 +52,7 @@ export default function App() {
             <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
             <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
             <Route path="/" element={<RequireAuth><EditorPage /></RequireAuth>} />
+            <Route path="/:slug" element={<FreeRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>

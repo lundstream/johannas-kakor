@@ -9,6 +9,8 @@ const FALLBACK: SiteConfig = {
   primary_color: '#b08654',
   instagram_url: '',
   default_locale: 'en',
+  free_mode_enabled: '0',
+  free_mode_path: 'free',
 };
 
 const Ctx = createContext<SiteConfig>(FALLBACK);

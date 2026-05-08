@@ -41,6 +41,8 @@ app.get('/api/public/site', (_req, res) => {
     primary_color: obj.primary_color || '#b08654',
     instagram_url: obj.instagram_url || '',
     default_locale: obj.default_locale || 'en',
+    free_mode_enabled: obj.free_mode_enabled || '0',
+    free_mode_path: obj.free_mode_path || 'free',
   });
 });
 
@@ -285,6 +287,8 @@ app.put('/api/admin/settings', requireAdmin, (req, res) => {
         'primary_color',
         'instagram_url',
         'default_locale',
+        'free_mode_enabled',
+        'free_mode_path',
       ].includes(key)
     ) continue;
     queries.setSetting.run(key, value);

@@ -146,6 +146,49 @@ export default function AdminPage() {
               <button onClick={saveSettings} disabled={savingSettings} className="btn btn-primary self-start mt-2">
                 {savingSettings ? 'Saving...' : 'Save settings'}
               </button>
+
+              <hr className="border-line" />
+
+              {/* Free preview mode */}
+              <div>
+                <div className="mb-2 font-semibold text-sm">Free preview mode</div>
+                <div className="flex flex-col gap-3 rounded-xl border border-line bg-cream/40 p-3 text-sm">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-ink"
+                      checked={settings.free_mode_enabled === '1'}
+                      onChange={(e) => updateSetting('free_mode_enabled', e.target.checked ? '1' : '0')}
+                    />
+                    <span>Enable public no-login editor</span>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="label">URL path</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-ink/50 text-xs whitespace-nowrap">kakor.lundstream.net/</span>
+                      <input
+                        className="input"
+                        value={settings.free_mode_path || 'free'}
+                        placeholder="free"
+                        onChange={(e) => updateSetting('free_mode_path', e.target.value.replace(/[^a-z0-9-_]/gi, '').toLowerCase())}
+                      />
+                    </div>
+                  </label>
+                  {settings.free_mode_enabled === '1' && (
+                    <div className="text-xs text-ink/60">
+                      Public URL:{' '}
+                      <a
+                        href={`/${settings.free_mode_path || 'free'}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-ink"
+                      >
+                        kakor.lundstream.net/{settings.free_mode_path || 'free'}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </section>

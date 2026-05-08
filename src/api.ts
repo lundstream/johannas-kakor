@@ -61,4 +61,6 @@ export interface SiteConfig {
   primary_color: string;
   instagram_url: string;
   default_locale: string;
+  free_mode_enabled: '0' | '1';
+  free_mode_path: string;
 }

@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS = {
   primary_color: '#b08654',
   instagram_url: 'https://www.instagram.com/johannaskakor',
   default_locale: 'sv',
+  free_mode_enabled: '0',
+  free_mode_path: 'free',
 };
 
 const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings(key, value) VALUES (?, ?)');
