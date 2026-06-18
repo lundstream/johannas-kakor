@@ -78,6 +78,8 @@ export interface TypographyConfig {
   fontFamily: FontFamily;
   /** Multiplier applied to all auto-calculated text sizes (0.6 – 1.6). */
   scale: number;
+  /** Horizontal text alignment on the label. Defaults to left (or logo-derived for old labels). */
+  align?: 'left' | 'center' | 'right';
   /** Optional explicit overrides in pt. Empty = use auto. */
   titlePt?: number;
   bodyPt?: number;

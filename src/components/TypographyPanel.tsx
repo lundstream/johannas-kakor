@@ -48,6 +48,31 @@ export function TypographyPanel({ typography, onTypography, sections, onSections
         />
       </label>
 
+      <div className="flex flex-col gap-1 text-xs text-ink/70">
+        Justering
+        <div className="grid grid-cols-3 gap-1 rounded-xl bg-cream p-1">
+          {([
+            { value: 'left', label: 'Vänster' },
+            { value: 'center', label: 'Mitten' },
+            { value: 'right', label: 'Höger' },
+          ] as const).map((opt) => {
+            const active = (typography.align ?? 'left') === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onTypography({ ...typography, align: opt.value })}
+                className={`rounded-lg py-1.5 text-xs transition ${
+                  active ? 'bg-paper font-semibold shadow-sm' : 'text-ink/60 hover:text-ink'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
         <PtField
           label="Titel pt"

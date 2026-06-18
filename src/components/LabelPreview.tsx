@@ -178,12 +178,21 @@ function Layout({
   const showStorage = fields.storage.visible && !!label.storage && variant !== 'minimal';
   const showExtra = fields.extraText.visible && !!label.extraText && variant === 'classic';
 
-  const colAlign =
-    pos === 'top' || pos === 'top-center'
-      ? 'items-center text-center'
+  // Explicit text alignment if set; otherwise derive from logo position (back-compat).
+  const align: 'left' | 'center' | 'right' =
+    label.typography?.align ??
+    (pos === 'top' || pos === 'top-center'
+      ? 'center'
       : pos === 'top-right' && !stackTop
+        ? 'right'
+        : 'left');
+  const colAlign =
+    align === 'center'
+      ? 'items-center text-center'
+      : align === 'right'
         ? 'items-end text-right'
-        : '';
+        : 'items-start text-left';
+  const metaJustify = align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
   const fieldGap = gap !== '0px' ? gap : '0.6mm';
   const showCodes = label.qr.enabled || label.barcode.enabled;
 
@@ -215,7 +224,7 @@ function Layout({
     ) : null,
     meta: showMeta ? (
       <div
-        className={`label-meta flex gap-2 text-[#000] ${pos === 'top-right' && !stackTop ? 'justify-end' : pos === 'top' || pos === 'top-center' ? 'justify-center' : ''}`}
+        className={`label-meta flex gap-2 text-[#000] ${metaJustify}`}
         style={fieldStyle('meta', metaPt)}
       >
         {label.weight && <span>{label.weight}</span>}
