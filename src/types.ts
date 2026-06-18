@@ -148,6 +148,8 @@ export interface LabelData {
   sections: SectionConfig;
   /** Per-field overrides (visibility + typography). */
   fields: Record<FieldKey, FieldStyle>;
+  /** Order in which the (orderable) text blocks render on the label, top to bottom. */
+  fieldOrder: FieldKey[];
   logo: LogoConfig;
   qr: QrConfig;
   barcode: BarcodeConfig;

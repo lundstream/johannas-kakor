@@ -27,6 +27,42 @@ export function defaultFieldStyles(): Record<FieldKey, FieldStyle> {
   };
 }
 
+/**
+ * The label fields that can be re-ordered on the label, in their default
+ * top-to-bottom order. `ingredientsLabel` and `allergenHelper` are intentionally
+ * excluded — they render as part of the `ingredientsList` block.
+ */
+export const DEFAULT_FIELD_ORDER: FieldKey[] = [
+  'bakeryName',
+  'productName',
+  'productDescription',
+  'meta',
+  'ingredientsList',
+  'allergenSeparate',
+  'bakedDate',
+  'bestBefore',
+  'storage',
+  'extraText',
+];
+
+const ORDERABLE = new Set<FieldKey>(DEFAULT_FIELD_ORDER);
+
+/** Sanitize a stored order: keep only orderable keys, then append any missing ones. */
+export function normalizeFieldOrder(order?: FieldKey[]): FieldKey[] {
+  const seen = new Set<FieldKey>();
+  const result: FieldKey[] = [];
+  for (const k of order ?? []) {
+    if (ORDERABLE.has(k) && !seen.has(k)) {
+      seen.add(k);
+      result.push(k);
+    }
+  }
+  for (const k of DEFAULT_FIELD_ORDER) {
+    if (!seen.has(k)) result.push(k);
+  }
+  return result;
+}
+
 export function createBlankLabel(): LabelData {
   return {
     id: uuid(),
@@ -58,6 +94,7 @@ export function createBlankLabel(): LabelData {
       showAllergenHelper: false,
     },
     fields: defaultFieldStyles(),
+    fieldOrder: [...DEFAULT_FIELD_ORDER],
     logo: { widthPercent: 30, position: 'top-left', monochrome: true },
     qr: { enabled: false, type: 'url', value: 'https://johannaskakor.se', sizeMm: 18 },
     barcode: { enabled: false, format: 'CODE128', value: '7350001234567', heightMm: 10 },

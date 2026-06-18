@@ -4,7 +4,7 @@ import type { FieldKey, FieldStyle, Ingredient, LabelData } from '../types';
 import { collectAllergens, tokenizeIngredient, allergenLabels } from '../utils/allergens';
 import { formatDateSv } from '../utils/format';
 import { renderBarcodeSvg } from '../utils/barcode';
-import { defaultFieldStyles } from '../data/templates';
+import { defaultFieldStyles, normalizeFieldOrder } from '../data/templates';
 
 interface Props {
   label: LabelData;
@@ -178,152 +178,161 @@ function Layout({
   const showStorage = fields.storage.visible && !!label.storage && variant !== 'minimal';
   const showExtra = fields.extraText.visible && !!label.extraText && variant === 'classic';
 
+  const colAlign =
+    pos === 'top' || pos === 'top-center'
+      ? 'items-center text-center'
+      : pos === 'top-right' && !stackTop
+        ? 'items-end text-right'
+        : '';
+  const fieldGap = gap !== '0px' ? gap : '0.6mm';
+  const showCodes = label.qr.enabled || label.barcode.enabled;
+
+  // Each orderable field renders an independent block; iterated in label.fieldOrder.
+  const blocks: Partial<Record<FieldKey, React.ReactNode>> = {
+    bakeryName: showBakery ? (
+      <div
+        className="uppercase tracking-[0.18em] text-[#000] opacity-80"
+        style={fieldStyle('bakeryName', metaPt * 0.78)}
+      >
+        {label.bakeryName}
+      </div>
+    ) : null,
+    productName: showProduct ? (
+      <h1
+        className="label-title text-[#000] whitespace-pre-line"
+        style={{ ...fieldStyle('productName', titlePt), overflow: 'visible' }}
+      >
+        {label.productName || 'Produktnamn'}
+      </h1>
+    ) : null,
+    productDescription: showDescription ? (
+      <div
+        className="text-[#000] whitespace-pre-line"
+        style={fieldStyle('productDescription', bodyPt * 0.95)}
+      >
+        {label.productDescription}
+      </div>
+    ) : null,
+    meta: showMeta ? (
+      <div
+        className={`label-meta flex gap-2 text-[#000] ${pos === 'top-right' && !stackTop ? 'justify-end' : pos === 'top' || pos === 'top-center' ? 'justify-center' : ''}`}
+        style={fieldStyle('meta', metaPt)}
+      >
+        {label.weight && <span>{label.weight}</span>}
+        {label.weight && label.price && <span>·</span>}
+        {label.price && <span>{label.price}</span>}
+      </div>
+    ) : null,
+    ingredientsList: showIngredients ? (
+      <section style={fieldStyle('ingredientsList', bodyPt)} className="leading-[1.25] text-[#000]">
+        {sections.ingredientsLabelOwnRow ? (
+          <>
+            {showIngLabel && (
+              <div
+                className={sections.ingredientsLabelBold ? 'font-semibold' : ''}
+                style={fieldStyle('ingredientsLabel', bodyPt)}
+              >
+                {sections.ingredientsLabelText || 'Ingredienser'}:
+              </div>
+            )}
+            <IngredientsInline
+              ingredients={label.ingredients}
+              allergenStyle={showInline ? allergenStyle : 'normal'}
+            />
+            <span>.</span>
+          </>
+        ) : (
+          <>
+            {showIngLabel && (
+              <span
+                className={sections.ingredientsLabelBold ? 'font-semibold' : ''}
+                style={fieldStyle('ingredientsLabel', bodyPt)}
+              >
+                {sections.ingredientsLabelText || 'Ingredienser'}:{' '}
+              </span>
+            )}
+            <IngredientsInline
+              ingredients={label.ingredients}
+              allergenStyle={showInline ? allergenStyle : 'normal'}
+            />
+            <span>.</span>
+          </>
+        )}
+        {showHelper && (
+          <>
+            {' '}
+            <span className="italic opacity-80" style={fieldStyle('allergenHelper', bodyPt * 0.92)}>
+              Allergener {allergenStyle.includes('caps') ? 'i versaler' : 'i fet stil'}.
+            </span>
+          </>
+        )}
+      </section>
+    ) : null,
+    allergenSeparate: showAllergenSeparate ? (
+      <section style={fieldStyle('allergenSeparate', bodyPt)} className="leading-[1.25] text-[#000]">
+        <span className={sections.allergenSeparateLabelBold ? 'font-semibold' : ''}>
+          {sections.allergenSeparateLabelText || 'Innehåller'}:{' '}
+        </span>
+        {allergenLabels(allergenCodes).join(', ')}.
+      </section>
+    ) : null,
+    bakedDate: showBakedDate ? (
+      <div className="text-[#000]" style={fieldStyle('bakedDate', metaPt)}>
+        <span className="font-semibold">Bakat: </span>
+        {formatDateSv(label.bakedDate)}
+      </div>
+    ) : null,
+    bestBefore: showBestBefore ? (
+      <div className="text-[#000]" style={fieldStyle('bestBefore', metaPt)}>
+        <span className="font-semibold">Bäst före: </span>
+        {formatDateSv(label.bestBefore)}
+      </div>
+    ) : null,
+    storage: showStorage ? (
+      <div
+        className="text-[#000] opacity-90 whitespace-pre-line"
+        style={fieldStyle('storage', bodyPt * 0.95)}
+      >
+        {label.storage}
+      </div>
+    ) : null,
+    extraText: showExtra ? (
+      <div
+        className="italic text-[#000] opacity-80 whitespace-pre-line"
+        style={fieldStyle('extraText', bodyPt * 0.95)}
+      >
+        {label.extraText}
+      </div>
+    ) : null,
+  };
+
+  const order = normalizeFieldOrder(label.fieldOrder);
+
   return (
-    <div
-      className="flex h-full w-full flex-col"
-      style={{ gap: gap !== '0px' ? gap : '0.6mm' }}
-    >
+    <div className="flex h-full w-full flex-col" style={{ gap: fieldGap }}>
       {stackTop && label.logo.dataUrl && (
         <div className={`flex w-full ${pos === 'top-right' ? 'justify-end' : pos === 'top-left' ? 'justify-start' : 'justify-center'}`}>
           <Logo label={label} pxPerMm={pxPerMm} />
         </div>
       )}
 
-      {/* Top row: logo + title block */}
-      <header
+      <div
         className={`flex gap-2 ${stackTop ? 'flex-col' : pos === 'top-right' ? 'flex-row-reverse' : 'flex-row'} ${headerJustify}`}
       >
         {!stackTop && <Logo label={label} pxPerMm={pxPerMm} />}
-        <div
-          className={`flex-1 min-w-0 ${pos === 'top-right' && !stackTop ? 'text-right' : pos === 'top' || pos === 'top-center' ? 'text-center' : ''}`}
-        >
-          {showBakery && (
-            <div
-              className="uppercase tracking-[0.18em] text-[#000] opacity-80"
-              style={fieldStyle('bakeryName', metaPt * 0.78)}
-            >
-              {label.bakeryName}
-            </div>
-          )}
-          {showProduct && (
-            <h1
-              className="label-title text-[#000] whitespace-pre-line"
-              style={{ ...fieldStyle('productName', titlePt), overflow: 'visible' }}
-            >
-              {label.productName || 'Produktnamn'}
-            </h1>
-          )}
-          {showDescription && (
-            <div
-              className="text-[#000] whitespace-pre-line"
-              style={fieldStyle('productDescription', bodyPt * 0.95)}
-            >
-              {label.productDescription}
-            </div>
-          )}
-          {showMeta && (
-            <div
-              className={`label-meta flex gap-2 text-[#000] ${pos === 'top-right' && !stackTop ? 'justify-end' : pos === 'top' || pos === 'top-center' ? 'justify-center' : ''}`}
-              style={fieldStyle('meta', metaPt)}
-            >
-              {label.weight && <span>{label.weight}</span>}
-              {label.weight && label.price && <span>·</span>}
-              {label.price && <span>{label.price}</span>}
-            </div>
-          )}
+        <div className={`flex min-w-0 flex-1 flex-col ${colAlign}`} style={{ gap: fieldGap }}>
+          {order.map((key) => {
+            const node = blocks[key];
+            return node ? <div key={key}>{node}</div> : null;
+          })}
         </div>
-      </header>
+      </div>
 
-      {/* Body: ingredients */}
-      {showIngredients && (
-        <section style={fieldStyle('ingredientsList', bodyPt)} className="leading-[1.25] text-[#000]">
-          {sections.ingredientsLabelOwnRow ? (
-            <>
-              {showIngLabel && (
-                <div
-                  className={sections.ingredientsLabelBold ? 'font-semibold' : ''}
-                  style={fieldStyle('ingredientsLabel', bodyPt)}
-                >
-                  {sections.ingredientsLabelText || 'Ingredienser'}:
-                </div>
-              )}
-              <IngredientsInline
-                ingredients={label.ingredients}
-                allergenStyle={showInline ? allergenStyle : 'normal'}
-              />
-              <span>.</span>
-            </>
-          ) : (
-            <>
-              {showIngLabel && (
-                <span
-                  className={sections.ingredientsLabelBold ? 'font-semibold' : ''}
-                  style={fieldStyle('ingredientsLabel', bodyPt)}
-                >
-                  {sections.ingredientsLabelText || 'Ingredienser'}:{' '}
-                </span>
-              )}
-              <IngredientsInline
-                ingredients={label.ingredients}
-                allergenStyle={showInline ? allergenStyle : 'normal'}
-              />
-              <span>.</span>
-            </>
-          )}
-          {showHelper && (
-            <>
-              {' '}
-              <span className="italic opacity-80" style={fieldStyle('allergenHelper', bodyPt * 0.92)}>
-                Allergener {allergenStyle.includes('caps') ? 'i versaler' : 'i fet stil'}.
-              </span>
-            </>
-          )}
-        </section>
-      )}
-
-      {showAllergenSeparate && (
-        <section style={fieldStyle('allergenSeparate', bodyPt)} className="leading-[1.25] text-[#000]">
-          <span className={sections.allergenSeparateLabelBold ? 'font-semibold' : ''}>
-            {sections.allergenSeparateLabelText || 'Innehåller'}:{' '}
-          </span>
-          {allergenLabels(allergenCodes).join(', ')}.
-        </section>
-      )}
-
-      {/* Footer: dates + storage + qr/barcode */}
-      <footer className="mt-auto flex items-end gap-2">
-        <div className="flex-1 min-w-0">
-          {showBakedDate && (
-            <div className="text-[#000]" style={fieldStyle('bakedDate', metaPt)}>
-              <span className="font-semibold">Bakat: </span>
-              {formatDateSv(label.bakedDate)}
-            </div>
-          )}
-          {showBestBefore && (
-            <div className="text-[#000]" style={fieldStyle('bestBefore', metaPt)}>
-              <span className="font-semibold">Bäst före: </span>
-              {formatDateSv(label.bestBefore)}
-            </div>
-          )}
-          {showStorage && (
-            <div
-              className="text-[#000] opacity-90 whitespace-pre-line"
-              style={fieldStyle('storage', bodyPt * 0.95)}
-            >
-              {label.storage}
-            </div>
-          )}
-          {showExtra && (
-            <div
-              className="mt-[0.4mm] italic text-[#000] opacity-80 whitespace-pre-line"
-              style={fieldStyle('extraText', bodyPt * 0.95)}
-            >
-              {label.extraText}
-            </div>
-          )}
+      {showCodes && (
+        <div className="mt-auto flex justify-end pt-[0.5mm]">
+          <CodesBlock label={label} pxPerMm={pxPerMm} />
         </div>
-        <CodesBlock label={label} pxPerMm={pxPerMm} />
-      </footer>
+      )}
     </div>
   );
 }

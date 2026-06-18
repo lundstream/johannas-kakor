@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuid } from 'uuid';
 import type { Ingredient, LabelData, Template } from '../types';
-import { createBlankLabel, defaultFieldStyles, PRESET_TEMPLATES } from '../data/templates';
+import { createBlankLabel, defaultFieldStyles, normalizeFieldOrder, PRESET_TEMPLATES } from '../data/templates';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Field } from '../components/Field';
 import { LabelExact, LabelPreview } from '../components/LabelPreview';
@@ -17,6 +17,7 @@ import { AllergenLegend } from '../components/AllergenLegend';
 import { Toolbar } from '../components/Toolbar';
 import { TypographyPanel } from '../components/TypographyPanel';
 import { FieldStylePanel } from '../components/FieldStylePanel';
+import { FieldOrderPanel } from '../components/FieldOrderPanel';
 import { collectAllergens } from '../utils/allergens';
 import { printNow } from '../utils/print';
 import { exportLabelsToPdf, exportLabelToPng } from '../utils/pdf';
@@ -54,6 +55,10 @@ export default function FreeEditorPage() {
       } else {
         const merged = { ...defaultFieldStyles(), ...next.fields };
         if (Object.keys(merged).length !== Object.keys(next.fields).length) { next.fields = merged; changed = true; }
+      }
+      const normOrder = normalizeFieldOrder(next.fieldOrder);
+      if (!Array.isArray(next.fieldOrder) || normOrder.length !== next.fieldOrder.length) {
+        next.fieldOrder = normOrder; changed = true;
       }
       return changed ? next : l;
     });
@@ -233,6 +238,17 @@ export default function FreeEditorPage() {
 
           <div className="card p-4">
             <h2 className="mb-3 font-display text-base font-semibold">Fältformatering</h2>
+            <div className="mb-4">
+              <span className="label">Ordning på etiketten</span>
+              <p className="mb-2 mt-1 text-[11px] text-ink/50">
+                Dra för att ändra i vilken ordning fälten visas på etiketten.
+              </p>
+              <FieldOrderPanel
+                order={normalizeFieldOrder(label.fieldOrder)}
+                fields={label.fields ?? defaultFieldStyles()}
+                onChange={(o) => updateLabel('fieldOrder', o)}
+              />
+            </div>
             <FieldStylePanel fields={label.fields ?? defaultFieldStyles()} onChange={(f) => updateLabel('fields', f)} />
           </div>
 
