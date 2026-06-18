@@ -1,22 +1,15 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { SiteConfigProvider, useSiteConfig, useSiteConfigLoaded } from './hooks/useSiteConfig';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import EditorPage from './pages/EditorPage';
 import FreeEditorPage from './pages/FreeEditorPage';
+import LandingPage from './pages/LandingPage';
 import type { ReactNode } from 'react';
 
 function Loading() {
   return <div className="grid min-h-full place-items-center text-sm text-ink/60">Loading…</div>;
-}
-
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  const loc = useLocation();
-  if (loading) return <Loading />;
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
-  return <>{children}</>;
 }
 
 function RequireAdmin({ children }: { children: ReactNode }) {
@@ -32,6 +25,13 @@ function GuestOnly({ children }: { children: ReactNode }) {
   if (loading) return <Loading />;
   if (user) return <Navigate to="/" replace />;
   return <>{children}</>;
+}
+
+/** "/" — logged-in users see the editor (unchanged); logged-out visitors see the landing page. */
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading />;
+  return user ? <EditorPage /> : <LandingPage />;
 }
 
 /** Handles /:slug — renders free editor if slug matches free_mode_path and free mode is on. */
@@ -53,7 +53,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
             <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
-            <Route path="/" element={<RequireAuth><EditorPage /></RequireAuth>} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="/:slug" element={<FreeRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
