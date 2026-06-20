@@ -90,6 +90,20 @@ migrateSetting.run('Enkelt etikettsystem för ditt bageri', 'header_tagline', 'L
 migrateSetting.run('Enkel Etikett · Enkelt etikettsystem för små bagerier', 'footer_text', 'Bakery Labels · A simple label designer for small bakeries');
 migrateSetting.run('', 'instagram_url', 'https://www.instagram.com/johannaskakor');
 
+// ---- Migration: entitlement / billing columns on users (idempotent) ----
+// Each account is the billable "tenant". Only the Stripe webhook writes these.
+function columnExists(table, col) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+}
+function addColumn(table, col, def) {
+  if (!columnExists(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('users', 'plan', "TEXT NOT NULL DEFAULT 'trial'"); // 'trial' | 'free_comp' | 'paid'
+addColumn('users', 'stripe_customer_id', 'TEXT');
+addColumn('users', 'stripe_subscription_id', 'TEXT');
+addColumn('users', 'subscription_status', 'TEXT'); // raw Stripe status
+db.exec('CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id)');
+
 export default db;
 
 export const queries = {
@@ -105,6 +119,18 @@ export const queries = {
   updateUserName: db.prepare('UPDATE users SET name = ? WHERE id = ?'),
   updateUserRole: db.prepare('UPDATE users SET role = ? WHERE id = ?'),
   deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
+
+  // billing / entitlement (written ONLY by the Stripe webhook + checkout customer creation)
+  findUserByStripeCustomer: db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?'),
+  updateUserStripeCustomer: db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?'),
+  setUserBilling: db.prepare(
+    `UPDATE users SET plan = ?,
+       stripe_customer_id = COALESCE(?, stripe_customer_id),
+       stripe_subscription_id = ?,
+       subscription_status = ?
+     WHERE id = ?`
+  ),
+  setUserPlan: db.prepare('UPDATE users SET plan = ? WHERE id = ?'),
   listUsers: db.prepare('SELECT id, email, name, role, created_at, last_login_at FROM users ORDER BY created_at DESC'),
 
   // sessions

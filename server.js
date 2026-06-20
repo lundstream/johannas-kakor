@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
@@ -6,6 +7,7 @@ import { z } from 'zod';
 
 import { settings } from './settings.js';
 import { queries } from './db.js';
+import { createCheckoutSession, createPortalSession, handleWebhook } from './billing.js';
 import {
   authMiddleware,
   requireAuth,
@@ -23,6 +25,12 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+// Stripe webhook MUST see the raw body for signature verification, so it is
+// registered BEFORE express.json() and uses express.raw on its own route only.
+// It is unauthenticated (verified by signature), so it sits ahead of authMiddleware too.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleWebhook);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(authMiddleware);
@@ -143,8 +151,35 @@ function publicUser(u) {
     role: u.role,
     created_at: u.created_at,
     last_login_at: u.last_login_at,
+    // plan is safe to expose (drives an "uppgradera" nudge); stripe_* are NOT shipped.
+    plan: u.plan || 'trial',
   };
 }
+
+// ---------- Billing ----------
+
+app.post('/api/billing/checkout', requireAuth, async (req, res) => {
+  try {
+    const url = await createCheckoutSession(req.user);
+    res.json({ url });
+  } catch (e) {
+    if (e.message === 'billing_not_configured') return res.status(503).json({ error: 'billing_not_configured' });
+    console.error('checkout error', e);
+    res.status(500).json({ error: 'checkout_failed' });
+  }
+});
+
+app.post('/api/billing/portal', requireAuth, async (req, res) => {
+  try {
+    const url = await createPortalSession(req.user);
+    res.json({ url });
+  } catch (e) {
+    if (e.message === 'no_customer') return res.status(400).json({ error: 'no_customer' });
+    if (e.message === 'billing_not_configured') return res.status(503).json({ error: 'billing_not_configured' });
+    console.error('portal error', e);
+    res.status(500).json({ error: 'portal_failed' });
+  }
+});
 
 // ---------- Per-user data ----------
 

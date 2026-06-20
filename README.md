@@ -50,6 +50,40 @@ npm run build
 npm run preview   # serverar på port 3050
 ```
 
+## Miljövariabler (Stripe-betalning)
+
+Prenumerationsbetalning hanteras via Stripe. Nycklarna läses **endast** från
+miljövariabler (aldrig från `settings.json`, databasen eller klienten). Kopiera
+`.env.example` till `.env` och fyll i:
+
+| Variabel | Beskrivning |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Hemlig API-nyckel (`sk_test_…` i utveckling). |
+| `STRIPE_WEBHOOK_SECRET` | Signeringshemlighet för `/api/billing/webhook` (eller `whsec_…` från `stripe listen`). |
+| `STRIPE_PRICE_ID` | Pris-id för prenumerationen som Checkout säljer. |
+
+`.env` är gitignorerad. I produktion sätts variablerna som riktiga
+miljövariabler. Utan dem är betalvägarna inaktiva (returnerar `503`); resten av
+appen fungerar som vanligt.
+
+### Webhook bakom Cloudflare
+
+Endpointen `POST /api/billing/webhook` verifieras enbart via Stripes signatur på
+den råa request-bodyn. Cloudflare framför origin måste därför:
+
+- **Inte** utmana (Bot Fight / Managed Challenge), cacha eller rate-limita den vägen.
+- Lämna bodyn orörd (ingen transformering).
+
+Korrektheten beror **inte** på klient-IP eller proxy-headers – sätt alltså inga
+`TRUST_PROXY`-antaganden för webhooken; den litar bara på den signerade bodyn.
+
+### Lokal test av webhook
+
+```bash
+stripe listen --forward-to localhost:3060/api/billing/webhook
+# klistra in den utskrivna whsec_… som STRIPE_WEBHOOK_SECRET i .env
+```
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).
