@@ -30,6 +30,7 @@
     "react-router-dom": "^7.15.0",
     "stripe": "^22.2.2",
     "uuid": "^9.0.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
