@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError, type User } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { IngredientTagEditor } from '../components/IngredientTagEditor';
+import { GalleryAdminPanel } from '../components/GalleryAdminPanel';
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -259,6 +260,12 @@ export default function AdminPage() {
         <section className="card p-4 lg:col-span-2">
           <h2 className="mb-3 font-display text-base font-semibold">Allergenmärkning (ingredienser)</h2>
           <IngredientTagEditor />
+        </section>
+
+        {/* Gallery moderation */}
+        <section className="card p-4 lg:col-span-2">
+          <h2 className="mb-3 font-display text-base font-semibold">Galleri (granskning &amp; moderering)</h2>
+          <GalleryAdminPanel />
         </section>
       </main>
     </div>

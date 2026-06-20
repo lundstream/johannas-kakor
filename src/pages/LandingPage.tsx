@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LegalLinks } from '../components/LegalPage';
+import { GallerySection } from '../components/GallerySection';
 
 /**
  * Marketing-/startsida för utloggade besökare.
@@ -185,6 +186,9 @@ export default function LandingPage() {
             ))}
           </ol>
         </section>
+
+        {/* ---------- Galleri ---------- */}
+        <GallerySection />
 
         {/* ---------- Avslutande CTA ---------- */}
         <section className="border-t border-line bg-ink text-paper">

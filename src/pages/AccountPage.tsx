@@ -4,6 +4,7 @@ import { api, ApiError } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LegalLinks } from '../components/LegalPage';
+import { GalleryAccountPanel } from '../components/GalleryAccountPanel';
 
 export default function AccountPage() {
   const site = useSiteConfig();
@@ -73,6 +74,8 @@ export default function AccountPage() {
             <dd>{planLabel}</dd>
           </dl>
         </div>
+
+        <GalleryAccountPanel />
 
         <div className="card p-5">
           <h2 className="mb-1 font-display text-lg font-semibold">Exportera dina uppgifter</h2>

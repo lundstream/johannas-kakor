@@ -5,8 +5,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
+import fs from 'node:fs';
 import { settings } from './settings.js';
 import { queries } from './db.js';
+import {
+  decodeUploadBase64,
+  processUploadImage,
+  saveUploadBuffer,
+  uploadFilePath,
+  sanitizeLink,
+  validTagIds,
+  ensureLabelThumb,
+  labelThumbPath,
+} from './gallery.js';
 import { createCheckoutSession, createPortalSession, handleWebhook } from './billing.js';
 import { isWatermarked } from './entitlements.js';
 import { renderLabel } from './export.js';
@@ -169,6 +180,125 @@ app.get('/api/public/nutrition-meta', (_req, res) => res.json(nutritionMeta()));
 /** Public: ingredient list + allergen tags (reference data; used by the editor incl. free mode). */
 app.get('/api/public/ingredients', (_req, res) => {
   res.json({ ingredients: listIngredientsWithAllergens() });
+});
+
+// ---------- Gallery (public showcase) ----------
+
+/** Public: the fixed, curated tag taxonomy (for filter chips). */
+app.get('/api/public/gallery/tags', (_req, res) => {
+  res.json({ tags: queries.listGalleryTags.all() });
+});
+
+/** Map of item -> tag ids, built once per request. Key: `${type}:${id}`. */
+function galleryTagMap() {
+  const m = new Map();
+  for (const t of queries.listAllItemTags.all()) {
+    const k = `${t.item_type}:${t.item_id}`;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(t.tag_id);
+  }
+  return m;
+}
+
+function bakeryNameFor(userId) {
+  const row = queries.getLabel.get(userId);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.data)?.bakeryName || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Public gallery feed: approved+visible premium uploads + opted-in PREMIUM rendered
+ * labels (Part 1 gating decision: premium-only exposure). Pinned first, then recent.
+ * Optional ?tag= filters to one taxonomy id. Images are lazy URLs (rendered/cached on hit).
+ */
+app.get('/api/public/gallery', (req, res) => {
+  const tag = typeof req.query.tag === 'string' ? req.query.tag : null;
+  const tagMap = galleryTagMap();
+  const items = [];
+
+  // Opted-in rendered labels — premium-only, not hidden.
+  for (const g of queries.listOptedInLabels.all()) {
+    if (g.admin_hidden) continue;
+    const user = queries.findUserById.get(g.user_id);
+    if (!user || !hasPremium(user)) continue; // gating: paid-active/free_comp/admin only
+    if (!queries.getLabel.get(g.user_id)) continue; // no label saved yet
+    const tags = tagMap.get(`label:${g.user_id}`) || [];
+    items.push({
+      type: 'label',
+      id: g.user_id,
+      imageUrl: `/api/gallery/labels/${g.user_id}.webp`,
+      attribution: bakeryNameFor(g.user_id),
+      link: null,
+      tags,
+      pinned: !!g.pinned,
+      sortTs: g.rendered_at || g.updated_at || 0,
+    });
+  }
+
+  // Approved + visible premium uploads.
+  for (const u of queries.listApprovedUploads.all()) {
+    const tags = tagMap.get(`upload:${u.id}`) || [];
+    items.push({
+      type: 'upload',
+      id: u.id,
+      imageUrl: `/api/gallery/uploads/${u.id}.webp`,
+      attribution: bakeryNameFor(u.user_id) || queries.findUserById.get(u.user_id)?.name || null,
+      caption: u.caption || null,
+      link: u.link_url ? { url: u.link_url, domain: u.link_domain } : null,
+      tags,
+      pinned: !!u.pinned,
+      sortTs: u.created_at || 0,
+    });
+  }
+
+  const filtered = tag ? items.filter((it) => it.tags.includes(tag)) : items;
+  filtered.sort((a, b) => (b.pinned === a.pinned ? b.sortTs - a.sortTs : b.pinned ? 1 : -1));
+  res.json({ items: filtered });
+});
+
+/**
+ * Serve a cached rendered-label thumbnail. Re-checks eligibility on every hit
+ * (opted-in + premium + not hidden) so a lapsed/opted-out tenant 404s immediately.
+ */
+app.get('/api/gallery/labels/:file', async (req, res) => {
+  const userId = parseInt(req.params.file, 10);
+  if (!Number.isInteger(userId)) return res.status(404).end();
+  const g = queries.getGalleryLabel.get(userId);
+  if (!g || !g.show_in_gallery || g.admin_hidden) return res.status(404).end();
+  const user = queries.findUserById.get(userId);
+  if (!user || !hasPremium(user)) return res.status(404).end();
+  const labelRow = queries.getLabel.get(userId);
+  if (!labelRow) return res.status(404).end();
+  let labelData;
+  try {
+    labelData = JSON.parse(labelRow.data);
+  } catch {
+    return res.status(404).end();
+  }
+  const name = await ensureLabelThumb(userId, labelData);
+  if (!name) return res.status(500).end();
+  res.setHeader('Content-Type', 'image/webp');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(labelThumbPath(name));
+});
+
+/** Serve an approved upload image. Pending/rejected/hidden never serve (404). */
+app.get('/api/gallery/uploads/:file', (req, res) => {
+  const id = parseInt(req.params.file, 10);
+  if (!Number.isInteger(id)) return res.status(404).end();
+  const u = queries.getUpload.get(id);
+  if (!u || u.status !== 'approved' || u.admin_hidden) return res.status(404).end();
+  res.setHeader('Content-Type', 'image/webp');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(uploadFilePath(u.image_path));
 });
 
 // ---------- Auth ----------
@@ -539,6 +669,121 @@ const rankZod = z.object({
 // ---------- Data subject rights (self-service, GDPR) ----------
 
 /** Export ALL of the requesting user's own data as a downloadable JSON file. */
+// ---------- Gallery (tenant self-service) ----------
+
+function cleanCaption(s) {
+  if (typeof s !== 'string') return null;
+  // Collapse control chars (incl. newlines) to spaces; cap length.
+  const t = s.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return t || null;
+}
+
+/** My gallery state: opt-in, my label's tags, and my uploads with their status. */
+app.get('/api/me/gallery', requireAuth, (req, res) => {
+  const uid = req.user.id;
+  const g = queries.getGalleryLabel.get(uid);
+  const uploads = queries.listUploadsByUser.all(uid).map((u) => ({
+    id: u.id,
+    status: u.status,
+    caption: u.caption || null,
+    link: u.link_url ? { url: u.link_url, domain: u.link_domain } : null,
+    tags: queries.listItemTags.all('upload', String(u.id)).map((r) => r.tag_id),
+    imageUrl: u.status === 'approved' && !u.admin_hidden ? `/api/gallery/uploads/${u.id}.webp` : null,
+    createdAt: u.created_at,
+  }));
+  res.json({
+    premium: hasPremium(req.user),
+    showInGallery: !!g?.show_in_gallery,
+    labelTags: queries.listItemTags.all('label', String(uid)).map((r) => r.tag_id),
+    hasLabel: !!queries.getLabel.get(uid),
+    uploads,
+  });
+});
+
+/** Toggle the rendered-label opt-in + set the label's tags. Enabling requires premium. */
+app.put('/api/me/gallery', requireAuth, (req, res) => {
+  const schema = z.object({
+    showInGallery: z.boolean(),
+    tags: z.array(z.string()).max(6).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  if (parsed.data.showInGallery && !hasPremium(req.user)) {
+    return res.status(403).json({ error: 'premium_required' });
+  }
+  const uid = req.user.id;
+  queries.upsertGalleryOptIn.run(uid, parsed.data.showInGallery ? 1 : 0, Date.now());
+  if (parsed.data.tags) {
+    const tags = validTagIds(parsed.data.tags);
+    queries.clearItemTags.run('label', String(uid));
+    for (const t of tags) queries.addItemTag.run('label', String(uid), t);
+  }
+  res.json({ ok: true });
+});
+
+/** Premium photo upload → lands status='pending' (never public until admin approves). */
+app.post('/api/me/gallery/uploads', requireAuth, async (req, res) => {
+  if (!hasPremium(req.user)) return res.status(403).json({ error: 'premium_required' });
+  const schema = z.object({
+    imageBase64: z.string().min(1),
+    caption: z.string().max(400).optional(),
+    linkUrl: z.string().max(400).optional(),
+    tags: z.array(z.string()).max(6).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+
+  let processed;
+  try {
+    const buf = decodeUploadBase64(parsed.data.imageBase64);
+    processed = await processUploadImage(buf);
+  } catch (e) {
+    const known = ['no_image', 'too_large', 'invalid_image', 'unsupported_format'];
+    return res.status(400).json({ error: known.includes(e?.message) ? e.message : 'invalid_image' });
+  }
+
+  const link = parsed.data.linkUrl ? sanitizeLink(parsed.data.linkUrl) : null;
+  if (parsed.data.linkUrl && !link) return res.status(400).json({ error: 'invalid_link' });
+
+  const name = saveUploadBuffer(processed.buffer, processed.ext);
+  const info = queries.createUpload.run({
+    user_id: req.user.id,
+    image_path: name,
+    caption: cleanCaption(parsed.data.caption),
+    link_url: link?.url || null,
+    link_domain: link?.domain || null,
+    width: processed.width,
+    height: processed.height,
+    created_at: Date.now(),
+  });
+  const id = info.lastInsertRowid;
+  for (const t of validTagIds(parsed.data.tags)) queries.addItemTag.run('upload', String(id), t);
+  res.json({ ok: true, id, status: 'pending' });
+});
+
+/** Preview my own upload at any status (so I can see a pending image before approval). */
+app.get('/api/me/gallery/uploads/:id/preview', requireAuth, (req, res) => {
+  const u = queries.getUpload.get(parseInt(req.params.id, 10));
+  if (!u || u.user_id !== req.user.id) return res.status(404).end();
+  res.setHeader('Content-Type', 'image/webp');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', 'inline');
+  res.sendFile(uploadFilePath(u.image_path));
+});
+
+/** Delete one of my uploads (file + row + tags). */
+app.delete('/api/me/gallery/uploads/:id', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const u = queries.getUpload.get(id);
+  if (!u || u.user_id !== req.user.id) return res.status(404).json({ error: 'not_found' });
+  try {
+    fs.unlinkSync(uploadFilePath(u.image_path));
+  } catch { /* file already gone */ }
+  queries.clearItemTags.run('upload', String(id));
+  queries.deleteUpload.run(id);
+  res.json({ ok: true });
+});
+
 app.get('/api/me/export', requireAuth, (req, res) => {
   const u = req.user;
   const labelRow = queries.getLabel.get(u.id);
@@ -785,10 +1030,107 @@ app.put('/api/admin/settings', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Gallery (admin moderation + approval queue) ----------
+
+/** Everything the operator needs: opted-in labels + all uploads (incl. pending/rejected). */
+app.get('/api/admin/gallery', requireAdmin, (_req, res) => {
+  const tagMap = galleryTagMap();
+  const labels = queries.listOptedInLabels.all().map((g) => {
+    const user = queries.findUserById.get(g.user_id);
+    return {
+      userId: g.user_id,
+      email: user?.email || null,
+      premium: user ? hasPremium(user) : false,
+      bakeryName: bakeryNameFor(g.user_id),
+      hasLabel: !!queries.getLabel.get(g.user_id),
+      hidden: !!g.admin_hidden,
+      pinned: !!g.pinned,
+      tags: tagMap.get(`label:${g.user_id}`) || [],
+      imageUrl: `/api/gallery/labels/${g.user_id}.webp`,
+    };
+  });
+  const uploads = queries.listAllUploads.all().map((u) => {
+    const user = queries.findUserById.get(u.user_id);
+    return {
+      id: u.id,
+      email: user?.email || null,
+      caption: u.caption || null,
+      link: u.link_url ? { url: u.link_url, domain: u.link_domain } : null,
+      status: u.status,
+      hidden: !!u.admin_hidden,
+      pinned: !!u.pinned,
+      tags: tagMap.get(`upload:${u.id}`) || [],
+      imageUrl: `/api/admin/gallery/uploads/${u.id}/image`, // admin preview (any status)
+      createdAt: u.created_at,
+    };
+  });
+  res.json({ labels, uploads });
+});
+
+/** Admin preview of an upload image at ANY status (pending/rejected included). */
+app.get('/api/admin/gallery/uploads/:id/image', requireAdmin, (req, res) => {
+  const u = queries.getUpload.get(parseInt(req.params.id, 10));
+  if (!u) return res.status(404).end();
+  res.setHeader('Content-Type', 'image/webp');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', 'inline');
+  res.sendFile(uploadFilePath(u.image_path));
+});
+
+/** Moderate an opted-in label: hide/show + pin/unpin. */
+app.patch('/api/admin/gallery/labels/:userId', requireAdmin, (req, res) => {
+  const schema = z.object({ hidden: z.boolean().optional(), pinned: z.boolean().optional() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const uid = parseInt(req.params.userId, 10);
+  const g = queries.getGalleryLabel.get(uid);
+  if (!g) return res.status(404).json({ error: 'not_found' });
+  const hidden = parsed.data.hidden ?? !!g.admin_hidden;
+  const pinned = parsed.data.pinned ?? !!g.pinned;
+  queries.setGalleryLabelModeration.run(hidden ? 1 : 0, pinned ? 1 : 0, Date.now(), uid);
+  res.json({ ok: true });
+});
+
+/** Approval queue + moderation for an upload: approve/reject, hide/show, pin/unpin. */
+app.patch('/api/admin/gallery/uploads/:id', requireAdmin, (req, res) => {
+  const schema = z.object({
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
+    hidden: z.boolean().optional(),
+    pinned: z.boolean().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const id = parseInt(req.params.id, 10);
+  const u = queries.getUpload.get(id);
+  if (!u) return res.status(404).json({ error: 'not_found' });
+  if (parsed.data.status) {
+    queries.setUploadStatus.run(parsed.data.status, Date.now(), req.user.id, id);
+  }
+  if (parsed.data.hidden !== undefined || parsed.data.pinned !== undefined) {
+    const cur = queries.getUpload.get(id);
+    const hidden = parsed.data.hidden ?? !!cur.admin_hidden;
+    const pinned = parsed.data.pinned ?? !!cur.pinned;
+    queries.setUploadModeration.run(hidden ? 1 : 0, pinned ? 1 : 0, id);
+  }
+  res.json({ ok: true });
+});
+
+/** Hard-delete an upload (file + row + tags). */
+app.delete('/api/admin/gallery/uploads/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const u = queries.getUpload.get(id);
+  if (!u) return res.status(404).json({ error: 'not_found' });
+  try {
+    fs.unlinkSync(uploadFilePath(u.image_path));
+  } catch { /* already gone */ }
+  queries.clearItemTags.run('upload', String(id));
+  queries.deleteUpload.run(id);
+  res.json({ ok: true });
+});
+
 // ---------- Static (production only) ----------
 
 const DIST = path.join(__dirname, 'dist');
-import fs from 'node:fs';
 if (fs.existsSync(DIST)) {
   app.use(express.static(DIST));
   app.get('/*splat', (req, res, next) => {

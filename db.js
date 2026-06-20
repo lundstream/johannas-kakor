@@ -243,6 +243,82 @@ try {
   console.error('allergen blob migration failed', e);
 }
 
+// ---- Gallery pillar: opt-in rendered-label feed + premium uploads + tags ----
+// Public-facing showcase data. Real tables (NOT label blobs). Idempotent.
+db.exec(`
+CREATE TABLE IF NOT EXISTS gallery_labels (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  show_in_gallery INTEGER NOT NULL DEFAULT 0, -- tenant opt-in (default OFF)
+  admin_hidden INTEGER NOT NULL DEFAULT 0,    -- operator moderation: hide from feed
+  pinned INTEGER NOT NULL DEFAULT 0,          -- operator: curated baseline / featured
+  render_path TEXT,                           -- cached PNG filename (under DATA/gallery/labels)
+  render_hash TEXT,                           -- hash of label data the cache was built from
+  rendered_at INTEGER,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gallery_uploads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  image_path TEXT NOT NULL,                   -- random server-generated filename (NEVER client name)
+  caption TEXT,
+  link_url TEXT,                              -- validated https only
+  link_domain TEXT,                           -- display domain (not raw text-as-URL)
+  width INTEGER,
+  height INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending',     -- 'pending' | 'approved' | 'rejected'
+  admin_hidden INTEGER NOT NULL DEFAULT 0,    -- un-publish an already-approved item
+  pinned INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  reviewed_at INTEGER,
+  reviewed_by INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_gallery_uploads_user ON gallery_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_gallery_uploads_status ON gallery_uploads(status);
+
+CREATE TABLE IF NOT EXISTS gallery_tags (
+  id TEXT PRIMARY KEY,   -- english slug
+  label TEXT NOT NULL,   -- swedish display
+  sort INTEGER NOT NULL DEFAULT 0
+);
+
+-- Polymorphic join: item_type in ('label','upload'); item_id is the user_id (label) or upload id.
+CREATE TABLE IF NOT EXISTS gallery_item_tags (
+  item_type TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL REFERENCES gallery_tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (item_type, item_id, tag_id)
+);
+`);
+
+// Fixed, curated Swedish taxonomy (server-owned; not user-writable). Extend here.
+const GALLERY_TAGS = [
+  ['brod', 'Bröd'],
+  ['bullar', 'Bullar'],
+  ['smakakor', 'Småkakor'],
+  ['kakor', 'Kakor & mjuka'],
+  ['tartor', 'Tårtor & bakelser'],
+  ['chark', 'Chark'],
+  ['sylt', 'Sylt & marmelad'],
+  ['choklad', 'Choklad & konfekt'],
+  ['ost', 'Ost'],
+  ['glutenfritt', 'Glutenfritt'],
+  ['veganskt', 'Veganskt'],
+];
+{
+  const insTag = db.prepare('INSERT INTO gallery_tags(id, label, sort) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET label = excluded.label, sort = excluded.sort');
+  GALLERY_TAGS.forEach(([id, label], i) => insTag.run(id, label, i));
+}
+
+// Gallery asset dirs live under the persisted data volume, OUTSIDE dist/web-root,
+// so uploads are never statically served or executable.
+export const GALLERY_DIR = path.join(DATA_DIR, 'gallery');
+export const GALLERY_LABELS_DIR = path.join(GALLERY_DIR, 'labels');
+export const GALLERY_UPLOADS_DIR = path.join(GALLERY_DIR, 'uploads');
+for (const d of [GALLERY_DIR, GALLERY_LABELS_DIR, GALLERY_UPLOADS_DIR]) {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+}
+
 export default db;
 
 export const queries = {
@@ -344,4 +420,40 @@ export const queries = {
     `INSERT INTO app_settings(key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   ),
+
+  // ---- Gallery: tags ----
+  listGalleryTags: db.prepare('SELECT id, label FROM gallery_tags ORDER BY sort, label'),
+  getGalleryTag: db.prepare('SELECT id FROM gallery_tags WHERE id = ?'),
+  listItemTags: db.prepare('SELECT tag_id FROM gallery_item_tags WHERE item_type = ? AND item_id = ?'),
+  clearItemTags: db.prepare('DELETE FROM gallery_item_tags WHERE item_type = ? AND item_id = ?'),
+  addItemTag: db.prepare('INSERT OR IGNORE INTO gallery_item_tags(item_type, item_id, tag_id) VALUES (?, ?, ?)'),
+  listAllItemTags: db.prepare('SELECT item_type, item_id, tag_id FROM gallery_item_tags'),
+
+  // ---- Gallery: per-tenant rendered-label opt-in (Part 1) ----
+  getGalleryLabel: db.prepare('SELECT * FROM gallery_labels WHERE user_id = ?'),
+  upsertGalleryOptIn: db.prepare(
+    `INSERT INTO gallery_labels(user_id, show_in_gallery, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET show_in_gallery = excluded.show_in_gallery, updated_at = excluded.updated_at`
+  ),
+  setGalleryLabelRender: db.prepare(
+    'UPDATE gallery_labels SET render_path = ?, render_hash = ?, rendered_at = ? WHERE user_id = ?'
+  ),
+  setGalleryLabelModeration: db.prepare(
+    'UPDATE gallery_labels SET admin_hidden = ?, pinned = ?, updated_at = ? WHERE user_id = ?'
+  ),
+  // Eligible opted-in labels (admin moderation + render cache resolved in JS against users/labels).
+  listOptedInLabels: db.prepare('SELECT * FROM gallery_labels WHERE show_in_gallery = 1'),
+
+  // ---- Gallery: premium uploads (Part 2) ----
+  createUpload: db.prepare(
+    `INSERT INTO gallery_uploads(user_id, image_path, caption, link_url, link_domain, width, height, status, created_at)
+     VALUES (@user_id, @image_path, @caption, @link_url, @link_domain, @width, @height, 'pending', @created_at)`
+  ),
+  getUpload: db.prepare('SELECT * FROM gallery_uploads WHERE id = ?'),
+  listUploadsByUser: db.prepare('SELECT * FROM gallery_uploads WHERE user_id = ? ORDER BY created_at DESC'),
+  listAllUploads: db.prepare("SELECT * FROM gallery_uploads ORDER BY (status = 'pending') DESC, created_at DESC"),
+  listApprovedUploads: db.prepare("SELECT * FROM gallery_uploads WHERE status = 'approved' AND admin_hidden = 0"),
+  setUploadStatus: db.prepare('UPDATE gallery_uploads SET status = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?'),
+  setUploadModeration: db.prepare('UPDATE gallery_uploads SET admin_hidden = ?, pinned = ? WHERE id = ?'),
+  deleteUpload: db.prepare('DELETE FROM gallery_uploads WHERE id = ?'),
 };

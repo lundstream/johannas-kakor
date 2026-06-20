@@ -56,6 +56,72 @@ export interface User {
   watermarked: boolean;
 }
 
+// ---------- Gallery ----------
+
+export interface GalleryTag {
+  id: string;
+  label: string;
+}
+
+export interface GalleryLink {
+  url: string;
+  domain: string;
+}
+
+export interface GalleryItem {
+  type: 'label' | 'upload';
+  id: number;
+  imageUrl: string;
+  attribution: string | null;
+  caption?: string | null;
+  link: GalleryLink | null;
+  tags: string[];
+  pinned: boolean;
+}
+
+export interface MyUpload {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  caption: string | null;
+  link: GalleryLink | null;
+  tags: string[];
+  imageUrl: string | null;
+  createdAt: number;
+}
+
+export interface MyGallery {
+  premium: boolean;
+  showInGallery: boolean;
+  labelTags: string[];
+  hasLabel: boolean;
+  uploads: MyUpload[];
+}
+
+export interface AdminGalleryLabel {
+  userId: number;
+  email: string | null;
+  premium: boolean;
+  bakeryName: string | null;
+  hasLabel: boolean;
+  hidden: boolean;
+  pinned: boolean;
+  tags: string[];
+  imageUrl: string;
+}
+
+export interface AdminGalleryUpload {
+  id: number;
+  email: string | null;
+  caption: string | null;
+  link: GalleryLink | null;
+  status: 'pending' | 'approved' | 'rejected';
+  hidden: boolean;
+  pinned: boolean;
+  tags: string[];
+  imageUrl: string;
+  createdAt: number;
+}
+
 export interface SiteConfig {
   site_name: string;
   header_tagline: string;
