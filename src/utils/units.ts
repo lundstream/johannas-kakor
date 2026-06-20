@@ -24,6 +24,11 @@ const DENSITY: { kw: string[]; d: number }[] = [
   { kw: ['sirap'], d: 1.4 },
   { kw: ['salt'], d: 1.2 },
   { kw: ['kakao'], d: 0.45 },
+  // Seeds & kernels measured by volume (1 dl ≈ 55–60 g): pumpa-/solros-/sesam-/lin-/chiafrö …
+  { kw: ['kärnor', 'kärna'], d: 0.55 }, // pumpakärnor, solroskärnor, sesamkärnor
+  { kw: ['frö', 'frön'], d: 0.6 }, // sesamfrö, linfrö, chiafrö, vallmofrö, hampafrö
+  // Rolled grains / flakes (light & fluffy): havregryn, rågflingor …
+  { kw: ['gryn', 'flingor', 'flinga'], d: 0.4 },
 ];
 
 // Per-piece weights for count items (st). Conservative; unknowns surfaced.
