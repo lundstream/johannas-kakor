@@ -4,6 +4,8 @@
 
 const BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://192.168.1.100:11434').replace(/\/$/, '');
 const MODEL = process.env.OLLAMA_MODEL || 'gemma4:e4b';
+// Optional smarter model for the harder ranking task (mapping assist); falls back to MODEL.
+const MAP_MODEL = process.env.OLLAMA_MAP_MODEL || MODEL;
 const NUM_CTX = Number(process.env.OLLAMA_NUM_CTX || 8192);
 const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 45000);
 
@@ -52,7 +54,7 @@ function extractJSON(content) {
  * (caller MUST schema-validate again, e.g. with zod). Throws 'ollama_unreachable'
  * on network/timeout, 'ollama_error' on HTTP error, 'ollama_bad_json' on garbage.
  */
-export async function chatJSON({ system, user, schema }) {
+export async function chatJSON({ system, user, schema, model }) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   let res;
@@ -62,7 +64,7 @@ export async function chatJSON({ system, user, schema }) {
       headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
       body: JSON.stringify({
-        model: MODEL,
+        model: model || MODEL,
         stream: false,
         think: false, // gemma4 is a thinking model — emit JSON directly
         format: schema,
@@ -83,4 +85,4 @@ export async function chatJSON({ system, user, schema }) {
   return extractJSON(data?.message?.content);
 }
 
-export const ollamaConfig = { BASE_URL, MODEL, NUM_CTX };
+export const ollamaConfig = { BASE_URL, MODEL, MAP_MODEL, NUM_CTX };

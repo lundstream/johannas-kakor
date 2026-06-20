@@ -11,7 +11,7 @@ import { createCheckoutSession, createPortalSession, handleWebhook } from './bil
 import { isWatermarked } from './entitlements.js';
 import { renderLabel } from './export.js';
 import { importNutrition, nutritionMeta } from './nutrition-import.js';
-import { chatJSON, ollamaAvailable } from './ollama.js';
+import { chatJSON, ollamaAvailable, ollamaConfig } from './ollama.js';
 import {
   authMiddleware,
   requireAuth,
@@ -662,16 +662,12 @@ app.put('/api/admin/ingredients/:id/livsmedelsnummer', requireAdmin, (req, res) 
   res.json({ ok: true });
 });
 
-// Capability 2: suggest a livsmedelsnummer mapping (fuzzy first, Gemma ranks the
-// ambiguous remainder among REAL candidates only — never generates a number).
-app.post('/api/admin/ingredients/:id/suggest-mapping', requireAdmin, async (req, res) => {
-  const ing = queries.getIngredient.get(req.params.id);
-  if (!ing) return res.status(404).json({ error: 'not_found' });
-  if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
-
+// Shared: fuzzy-rank candidates, then (optionally) let the smarter MAP_MODEL pick
+// among the REAL candidates only. Never generates a livsmedelsnummer.
+async function computeSuggestion(ingName, useAi) {
   const ranked = queries.listNutritionNames
     .all()
-    .map((r) => ({ livsmedelsnummer: r.livsmedelsnummer, namn: r.namn, score: scoreMatch(ing.name, r.namn) }))
+    .map((r) => ({ livsmedelsnummer: r.livsmedelsnummer, namn: r.namn, score: scoreMatch(ingName, r.namn) }))
     .sort((a, b) => b.score - a.score);
   const topN = ranked.slice(0, 6);
   const best = topN[0];
@@ -684,58 +680,60 @@ app.post('/api/admin/ingredients/:id/suggest-mapping', requireAdmin, async (req,
   if (best && best.score >= 0.85 && (!second || best.score - second.score >= 0.15) && variants.length === 0) {
     suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'hög' };
   } else if (best && best.score >= 0.25) {
-    try {
-      const list = topN.map((c) => `${c.livsmedelsnummer}: ${c.namn}`).join('\n');
-      const raw = await chatJSON({
-        schema: RANK_SCHEMA,
-        system:
-          'Välj det livsmedel ur kandidatlistan som bäst motsvarar ingrediensen. Svara med JSON ' +
-          '{livsmedelsnummer, reason}. livsmedelsnummer MÅSTE vara ett av numren i listan – hitta inte på nummer. reason kort på svenska.',
-        user: `Ingrediens: ${ing.name}\nKandidater:\n${list}`,
-      });
-      const z2 = rankZod.safeParse(raw);
-      // HARD CONSTRAINT: only accept an id that was in the candidate list.
-      const picked = z2.success ? topN.find((c) => String(c.livsmedelsnummer) === z2.data.livsmedelsnummer) : null;
-      if (picked) {
-        suggestion = { livsmedelsnummer: picked.livsmedelsnummer, namn: picked.namn, confidence: 'medel', reason: (z2.data.reason || '').slice(0, 200) };
-        usedModel = true;
-      } else {
+    if (useAi) {
+      try {
+        const list = topN.map((c) => `${c.livsmedelsnummer}: ${c.namn}`).join('\n');
+        const raw = await chatJSON({
+          schema: RANK_SCHEMA,
+          model: ollamaConfig.MAP_MODEL,
+          system:
+            'Välj det livsmedel ur kandidatlistan som bäst motsvarar ingrediensen. Svara med JSON ' +
+            '{livsmedelsnummer, reason}. livsmedelsnummer MÅSTE vara ett av numren i listan – hitta inte på nummer. reason kort på svenska.',
+          user: `Ingrediens: ${ingName}\nKandidater:\n${list}`,
+        });
+        const z2 = rankZod.safeParse(raw);
+        const picked = z2.success ? topN.find((c) => String(c.livsmedelsnummer) === z2.data.livsmedelsnummer) : null;
+        if (picked) {
+          suggestion = { livsmedelsnummer: picked.livsmedelsnummer, namn: picked.namn, confidence: 'medel', reason: (z2.data.reason || '').slice(0, 200) };
+          usedModel = true;
+        } else {
+          suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'låg' };
+        }
+      } catch {
         suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'låg' };
       }
-    } catch {
-      // Ollama unavailable — still offer the deterministic fuzzy best (low confidence).
+    } else {
       suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'låg' };
     }
   }
 
-  res.json({
-    suggestion,
-    candidates: topN.map((c) => ({ livsmedelsnummer: c.livsmedelsnummer, namn: c.namn })),
-    variants,
-    usedModel,
-  });
+  return { suggestion, candidates: topN.map((c) => ({ livsmedelsnummer: c.livsmedelsnummer, namn: c.namn })), variants, usedModel };
+}
+
+// Capability 2: per-ingredient suggestion (uses the smarter MAP_MODEL for ambiguous cases).
+app.post('/api/admin/ingredients/:id/suggest-mapping', requireAdmin, async (req, res) => {
+  const ing = queries.getIngredient.get(req.params.id);
+  if (!ing) return res.status(404).json({ error: 'not_found' });
+  if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
+  res.json(await computeSuggestion(ing.name, true));
 });
 
 // TESTING convenience: bulk auto-map every UNMAPPED ingredient to its best fuzzy
 // candidate (fuzzy-only for speed; no LLM). Deliberately auto-applies — meant for
 // seeding test data; the per-ingredient "Föreslå mappning" (Gemma) is the real,
 // human-confirmed pass. Never overwrites already-mapped ingredients.
-app.post('/api/admin/ingredients/auto-map', requireAdmin, (req, res) => {
+app.post('/api/admin/ingredients/auto-map', requireAdmin, async (req, res) => {
   if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
-  const names = queries.listNutritionNames.all();
+  const useAi = !!req.body?.useAi; // AI ranking for ambiguous (slower, smarter)
+  const force = !!req.body?.force; // also re-map already-mapped ingredients
   const ings = queries.listIngredients.all();
   let mapped = 0;
   const skipped = [];
   for (const ing of ings) {
-    if (ing.livsmedelsnummer) continue; // never clobber existing mappings
-    let best = null;
-    let bestScore = 0;
-    for (const c of names) {
-      const s = scoreMatch(ing.name, c.namn);
-      if (s > bestScore) { bestScore = s; best = c; }
-    }
-    if (best && bestScore >= 0.3) {
-      queries.setIngredientLivsmedelsnummer.run(best.livsmedelsnummer, ing.id);
+    if (ing.livsmedelsnummer && !force) continue; // don't clobber unless forced
+    const r = await computeSuggestion(ing.name, useAi);
+    if (r.suggestion) {
+      queries.setIngredientLivsmedelsnummer.run(r.suggestion.livsmedelsnummer, ing.id);
       mapped++;
     } else {
       skipped.push(ing.name);
