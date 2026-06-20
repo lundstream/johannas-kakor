@@ -19,6 +19,7 @@ import { FieldStylePanel } from '../components/FieldStylePanel';
 import { FieldOrderPanel } from '../components/FieldOrderPanel';
 import { LegalLinks } from '../components/LegalPage';
 import { RecipePanel } from '../components/RecipePanel';
+import { CompletenessPanel } from '../components/CompletenessPanel';
 import { collectAllergens } from '../utils/allergens';
 import { printNow } from '../utils/print';
 import { exportLabelsToPdf, exportLabelToPng } from '../utils/pdf';
@@ -99,6 +100,10 @@ export default function EditorPage() {
       }
       if (!next.recipe || !Array.isArray(next.recipe.rows)) {
         next.recipe = { rows: [] };
+        changed = true;
+      }
+      if (next.packagingType !== 'färdigförpackad' && next.packagingType !== 'inte färdigförpackad') {
+        next.packagingType = 'inte färdigförpackad';
         changed = true;
       }
       return changed ? next : l;
@@ -366,6 +371,14 @@ export default function EditorPage() {
               onChange={(r) => updateLabel('recipe', r)}
               customIngredients={customIngredients}
               onApply={(ings) => updateLabel('ingredients', ings)}
+            />
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-3 font-display text-base font-semibold">Är etiketten komplett?</h2>
+            <CompletenessPanel
+              label={label}
+              onChangePackaging={(v) => updateLabel('packagingType', v)}
             />
           </div>
 

@@ -8,6 +8,7 @@ import { Field } from '../components/Field';
 import { LabelExact, LabelPreview } from '../components/LabelPreview';
 import { LegalLinks } from '../components/LegalPage';
 import { RecipePanel } from '../components/RecipePanel';
+import { CompletenessPanel } from '../components/CompletenessPanel';
 import { IngredientPicker } from '../components/IngredientPicker';
 import { IngredientList } from '../components/IngredientList';
 import { LogoUploader } from '../components/LogoUploader';
@@ -76,6 +77,7 @@ export default function FreeEditorPage() {
         next.fieldOrder = normOrder; changed = true;
       }
       if (!next.recipe || !Array.isArray(next.recipe.rows)) { next.recipe = { rows: [] }; changed = true; }
+      if (next.packagingType !== 'färdigförpackad' && next.packagingType !== 'inte färdigförpackad') { next.packagingType = 'inte färdigförpackad'; changed = true; }
       return changed ? next : l;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -238,6 +240,14 @@ export default function FreeEditorPage() {
               onChange={(r) => updateLabel('recipe', r)}
               customIngredients={customIngredients}
               onApply={(ings) => updateLabel('ingredients', ings)}
+            />
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-3 font-display text-base font-semibold">Är etiketten komplett?</h2>
+            <CompletenessPanel
+              label={label}
+              onChangePackaging={(v) => updateLabel('packagingType', v)}
             />
           </div>
 

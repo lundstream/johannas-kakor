@@ -186,6 +186,8 @@ export interface LabelData {
   fieldOrder: FieldKey[];
   /** Optional recipe that auto-generates the ingredient declaration in descending weight order. */
   recipe: RecipeConfig;
+  /** Drives the mode-aware completeness checker. Internal key; Swedish values. */
+  packagingType: 'färdigförpackad' | 'inte färdigförpackad';
   logo: LogoConfig;
   qr: QrConfig;
   barcode: BarcodeConfig;
