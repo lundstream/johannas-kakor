@@ -12,29 +12,83 @@ const VOLUME_ML: Record<string, number> = {
 };
 
 // Density (g per ml) for common bakery ingredients, matched by name token. Order
-// matters — more specific groups first (florsocker before socker, liquids before mjöl).
+// matters — more specific groups first (florsocker before socker, powders before
+// liquids, marzipan before nuts, flour after the liquids that contain "mjölk").
 const DENSITY: { kw: string[]; d: number }[] = [
-  { kw: ['vatten', 'mjölk', 'grädde', 'filmjölk', 'kärnmjölk', 'crème', 'créme'], d: 1.0 },
+  // Powders (before liquids, so "*pulver" doesn't inherit a liquid density).
+  { kw: ['mjölkpulver', 'skummjölkspulver', 'äggpulver', 'mandelmjöl', 'kokosmjöl'], d: 0.45 },
+  // Thin liquids & fresh dairy (~water).
+  { kw: ['vatten', 'mjölk', 'grädde', 'filmjölk', 'kärnmjölk', 'yoghurt', 'kvarg', 'vassle', 'kaffe', 'espresso'], d: 1.0 },
+  { kw: ['creme', 'fraiche', 'färskost'], d: 1.0 }, // crème fraiche, färskost (è normaliseras till e)
+  { kw: ['citronsaft', 'saft'], d: 1.0 },
+  { kw: ['surdeg'], d: 1.0 },
+  { kw: ['ost'], d: 0.4 }, // riven ost
+  // Spirits & flavour extracts.
+  { kw: ['rom', 'konjak', 'likör', 'sprit'], d: 0.95 },
+  { kw: ['essens', 'essence', 'arom', 'extrakt'], d: 0.9 },
+  // Sweeteners & syrups.
+  { kw: ['honung'], d: 1.4 },
+  { kw: ['sirap', 'glykos', 'melass'], d: 1.4 },
   { kw: ['florsocker'], d: 0.5 },
-  { kw: ['socker'], d: 0.85 }, // strösocker, råsocker, farinsocker …
-  { kw: ['mjöl'], d: 0.6 }, // vetemjöl, rågmjöl, dinkelmjöl … (mjölk excluded: doesn't end in "mjöl")
+  { kw: ['socker'], d: 0.85 }, // strösocker, råsocker, farinsocker, vaniljsocker …
+  { kw: ['fruktos', 'dextros'], d: 0.85 },
+  // Fats.
   { kw: ['smör'], d: 0.95 },
   { kw: ['margarin'], d: 0.95 },
-  { kw: ['olja'], d: 0.92 },
-  { kw: ['sirap'], d: 1.4 },
-  { kw: ['salt'], d: 1.2 },
-  { kw: ['kakao'], d: 0.45 },
-  // Seeds & kernels measured by volume (1 dl ≈ 55–60 g): pumpa-/solros-/sesam-/lin-/chiafrö …
-  { kw: ['kärnor', 'kärna'], d: 0.55 }, // pumpakärnor, solroskärnor, sesamkärnor
-  { kw: ['frö', 'frön'], d: 0.6 }, // sesamfrö, linfrö, chiafrö, vallmofrö, hampafrö
-  // Rolled grains / flakes (light & fluffy): havregryn, rågflingor …
+  { kw: ['olja'], d: 0.92 }, // rapsolja, olivolja, kokosolja …
+  { kw: ['tahini'], d: 0.95 },
+  // Almond paste / marzipan (dense) — before nuts so "mandel…" doesn't take the nut density.
+  { kw: ['mandelmassa', 'marsipan', 'massa'], d: 1.0 },
+  // Nuts.
+  { kw: ['mandel', 'hasselnöt', 'valnöt', 'pekannöt', 'cashew', 'pistage', 'paranöt', 'jordnöt', 'nötter', 'nöt'], d: 0.55 },
+  // Seeds & kernels (1 dl ≈ 55–60 g): pumpa-/solros-/sesam-/lin-/chiafrö …
+  { kw: ['kärnor', 'kärna'], d: 0.55 },
+  { kw: ['frö', 'frön'], d: 0.6 },
+  // Dried fruit & berries.
+  { kw: ['russin', 'sultan', 'korinter', 'aprikos', 'dadlar', 'dadel', 'fikon', 'tranbär', 'sukat'], d: 0.6 },
+  { kw: ['blåbär', 'hallon', 'jordgubb', 'lingon', 'bär'], d: 0.6 },
+  // Coconut (shredded, light).
+  { kw: ['kokos'], d: 0.35 },
+  // Flour family.
+  { kw: ['mjöl'], d: 0.6 }, // vetemjöl, rågmjöl, dinkelmjöl … (mjölk handled above)
+  { kw: ['rågsikt', 'sikt', 'durum', 'stärkelse', 'kli', 'groddar'], d: 0.5 },
+  // Rolled grains / flakes / bran (light & fluffy).
   { kw: ['gryn', 'flingor', 'flinga'], d: 0.4 },
+  { kw: ['kakao'], d: 0.45 },
+  // Spices & zest (small amounts, tsk/krm).
+  { kw: ['kardemumma', 'kanel', 'ingefära', 'muskot', 'nejlika', 'anis', 'fänkål', 'vanilj', 'skal', 'krydda'], d: 0.5 },
+  // Leavening / raising agents.
+  { kw: ['jäst', 'bakpulver', 'bikarbonat', 'hjorthorn', 'vinsten'], d: 0.8 },
+  // Gelling & additives.
+  { kw: ['pektin', 'agar', 'gelatin', 'lecitin', 'citronsyra'], d: 0.6 },
+  // Salt (dense crystalline).
+  { kw: ['salt'], d: 1.2 },
+  // Egg by volume (whole egg ≈ 1.03; per-piece "st" handled in COUNT_G).
+  { kw: ['ägg'], d: 1.03 },
 ];
 
 // Per-piece weights for count items (st). Conservative; unknowns surfaced.
-const COUNT_G: { kw: string[]; g: number }[] = [{ kw: ['ägg'], g: 50 }];
+const COUNT_G: { kw: string[]; g: number }[] = [
+  { kw: ['ägg'], g: 50 },
+  { kw: ['äpple', 'päron'], g: 150 },
+  { kw: ['banan'], g: 120 },
+  { kw: ['apelsin'], g: 130 },
+  { kw: ['citron'], g: 100 },
+  { kw: ['vaniljstång', 'vaniljstang'], g: 3 },
+];
 
-const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-zåäö0-9 ]/g, ' ').trim();
+// Lower-case + fold common Latin accents (é→e) so "crème" matches, while keeping å ä ö.
+const norm = (s: string) =>
+  (s || '')
+    .toLowerCase()
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[áàâã]/g, 'a')
+    .replace(/[íìî]/g, 'i')
+    .replace(/[óòôõ]/g, 'o')
+    .replace(/[úùû]/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-zåäö0-9 ]/g, ' ')
+    .trim();
 const tokens = (s: string) => norm(s).split(/\s+/).filter(Boolean);
 
 function matchKw(name: string, groups: { kw: string[] }[]): number {
