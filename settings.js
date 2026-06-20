@@ -24,8 +24,13 @@ export const settings = {
   session_days: Number(pick(env.SESSION_DAYS, fileSettings.session_days, 30)),
   magic_link_minutes: Number(pick(env.MAGIC_LINK_MINUTES, fileSettings.magic_link_minutes, 15)),
   base_url: pick(env.BASE_URL, fileSettings.base_url, 'http://localhost:3050'),
-  resend_api_key: pick(env.RESEND_API_KEY, fileSettings.resend_api_key, ''),
-  email_from: pick(env.EMAIL_FROM, fileSettings.email_from, 'Enkel Etikett <noreply@example.com>'),
+  // SMTP (e.g. Gmail / Google Workspace). Secrets from env only.
+  smtp_host: pick(env.SMTP_HOST, fileSettings.smtp_host, 'smtp.gmail.com'),
+  smtp_port: Number(pick(env.SMTP_PORT, fileSettings.smtp_port, 587)),
+  smtp_secure: String(pick(env.SMTP_SECURE, fileSettings.smtp_secure, Number(pick(env.SMTP_PORT, fileSettings.smtp_port, 587)) === 465)) === 'true',
+  smtp_user: pick(env.SMTP_USER, fileSettings.smtp_user, ''),
+  smtp_pass: pick(env.SMTP_PASS, fileSettings.smtp_pass, ''),
+  email_from: pick(env.EMAIL_FROM, fileSettings.email_from, 'Enkel Etikett <noreply@enkeletikett.se>'),
   first_admin_email: pick(env.FIRST_ADMIN_EMAIL, fileSettings.first_admin_email, ''),
   google: fileSettings.google || { enabled: false, client_id: '', client_secret: '' },
   // Raw value; parsed into Express's trust-proxy setting in server.js.

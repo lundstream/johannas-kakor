@@ -134,6 +134,18 @@ IP. Använd aldrig `true` i produktion (då kan klienter förfalska `X-Forwarded
 Stripe-webhooken (`/api/billing/webhook`) tar emot **rå body** och rate-limitas
 inte – oberoende av `TRUST_PROXY`.
 
+### E-post (SMTP)
+
+Inloggningslänkar skickas via SMTP (Gmail / Google Workspace). Konfigureras med
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` och `EMAIL_FROM`.
+
+- Använd ett **app-lösenord** (kräver 2-stegsverifiering på Google-kontot) – inte
+  det vanliga lösenordet.
+- `EMAIL_FROM` måste vara det autentiserade kontot eller en godkänd
+  "skicka e-post som"-alias (annars skriver Gmail om eller avvisar avsändaren).
+- Standard: `smtp.gmail.com:587` (STARTTLS). Utan SMTP-konfig loggas mejlen bara
+  till konsolen (utveckling).
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).
