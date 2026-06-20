@@ -28,6 +28,20 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Trust proxy for the Cloudflare -> reverse proxy -> app chain, so req.ip,
+// secure-cookie detection and rate limiting see the real client IP. Configured
+// via TRUST_PROXY (see README/.env.example): a number (hop count), 'true'/'false',
+// or a comma-separated list of trusted proxy IPs/CIDRs. Never defaults to trusting
+// everything. Does NOT affect the raw-body webhook below.
+if (settings.trust_proxy !== undefined && settings.trust_proxy !== '') {
+  const tp = String(settings.trust_proxy).trim();
+  let value;
+  if (/^\d+$/.test(tp)) value = Number(tp);
+  else if (tp === 'true' || tp === 'false') value = tp === 'true';
+  else value = tp.includes(',') ? tp.split(',').map((s) => s.trim()) : tp;
+  app.set('trust proxy', value);
+}
+
 // Stripe webhook MUST see the raw body for signature verification, so it is
 // registered BEFORE express.json() and uses express.raw on its own route only.
 // It is unauthenticated (verified by signature), so it sits ahead of authMiddleware too.

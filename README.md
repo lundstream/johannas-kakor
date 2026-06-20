@@ -104,6 +104,36 @@ krävs systembibliotek för Chromium. I utveckling serverar API:t inte SPA:t, s�
 sätt `EXPORT_BASE_URL` till en körande build (t.ex. `http://localhost:3050`),
 annars används API:ts egen origin (som serverar `dist` i produktion).
 
+## Docker / driftsättning
+
+Appen körs som **en container** (Express + byggd SPA + Chromium för export).
+
+```bash
+cp .env.example .env      # fyll i alla värden (secrets injiceras i runtime)
+docker compose up -d --build
+```
+
+- All konfiguration/secrets kommer **endast** från `.env` (env_file) – inget
+  bakas in i image-lager, `settings.json` krävs inte i containern.
+- SQLite ligger på en namngiven volym (`app-data` → `/app/data`); sätt `DB_PATH`
+  därefter. `dist` byggs i imagen.
+- Containern binds till `127.0.0.1:3060` och nås via din reverse proxy.
+
+### Bakom Cloudflare + reverse proxy
+
+Sätt `TRUST_PROXY` så att Express ser rätt klient-IP genom kedjan
+Cloudflare → proxy → app. Värdet kan vara ett **hopp-antal** (`2`), `true`/`false`,
+eller en **lista med betrodda proxy-IP/CIDR** (kommaseparerat) – t.ex. din proxys
+IP. Använd aldrig `true` i produktion (då kan klienter förfalska `X-Forwarded-For`).
+
+> Verifiera: logga `req.ip` för en riktig request. Visar den proxyns/Cloudflares
+> IP i stället för klientens, lägger din proxy till `X-Forwarded-For` – lägg då
+> även till Cloudflares IP-intervall i `TRUST_PROXY`, eller låt proxyn sätta
+> klient-IP från `CF-Connecting-IP`.
+
+Stripe-webhooken (`/api/billing/webhook`) tar emot **rå body** och rate-limitas
+inte – oberoende av `TRUST_PROXY`.
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).

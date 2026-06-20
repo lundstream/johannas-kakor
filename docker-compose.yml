@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    image: enkeletikett
+    restart: unless-stopped
+    # All config/secrets are injected at runtime from .env (never baked in).
+    env_file: .env
+    # Bind to loopback only — your existing proxy (Cloudflare -> proxy -> app)
+    # terminates and forwards to this. Change to "3060:3060" only if the proxy
+    # lives on a different host and a firewall protects the port.
+    ports:
+      - "127.0.0.1:3060:3060"
+    volumes:
+      - app-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3060/api/public/site').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  app-data:
