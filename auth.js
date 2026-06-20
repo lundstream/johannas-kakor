@@ -83,6 +83,63 @@ export async function verifyPassword(plain, hash) {
   return bcrypt.compare(plain, hash);
 }
 
+/** Read branding from app_settings (white-label) with fallbacks. */
+function brand() {
+  const get = (k) => queries.getSetting.get(k)?.value || '';
+  return {
+    name: get('site_name') || 'Enkel Etikett',
+    tagline: get('header_tagline'),
+    accent: get('primary_color') || '#b08654',
+  };
+}
+function brandName() {
+  return brand().name;
+}
+
+function magicLinkText(url, minutes) {
+  const b = brand();
+  return `Logga in på ${b.name}:\n${url}\n\nLänken är giltig i ${minutes} minuter. Om du inte begärde den kan du ignorera det här mejlet.`;
+}
+
+/** On-brand, mobile-friendly HTML email (table layout + inline styles for email clients). */
+export function magicLinkHtml(url, minutes) {
+  const b = brand();
+  const initial = (b.name[0] || 'E').toUpperCase();
+  const tagline = b.tagline
+    ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#6b6b6b;margin-top:6px;">${b.tagline}</div>`
+    : '';
+  return `<!doctype html>
+<html lang="sv"><body style="margin:0;padding:0;background:#f5f1e8;">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0;">Din inloggningslänk till ${b.name} – giltig i ${minutes} minuter.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f1e8;padding:32px 16px;">
+<tr><td align="center">
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:480px;background:#ffffff;border:1px solid #e7e3d8;border-radius:20px;overflow:hidden;">
+<tr><td style="height:4px;background:${b.accent};font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td align="center" style="padding:32px 32px 4px;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td align="center" style="width:46px;height:46px;background:#0a0a0a;border-radius:13px;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:22px;color:#fafaf7;line-height:46px;">${initial}</td></tr></table>
+<div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#0a0a0a;margin-top:14px;">${b.name}</div>
+${tagline}
+</td></tr>
+<tr><td align="center" style="padding:8px 32px 0;">
+<div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:#0a0a0a;margin:18px 0 8px;">Logga in</div>
+<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#3f3f3f;margin:0 0 24px;">Klicka på knappen för att logga in på ${b.name}.</p>
+<a href="${url}" style="display:inline-block;background:#0a0a0a;color:#fafaf7;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;padding:13px 34px;border-radius:999px;">Logga in</a>
+</td></tr>
+<tr><td style="padding:26px 32px 0;">
+<p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#8a8a8a;margin:0 0 6px;">Eller klistra in den här länken i webbläsaren:</p>
+<p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;word-break:break-all;"><a href="${url}" style="color:${b.accent};">${url}</a></p>
+</td></tr>
+<tr><td style="padding:24px 32px 32px;">
+<div style="border-top:1px solid #e7e3d8;margin:0 0 16px;font-size:0;line-height:0;">&nbsp;</div>
+<p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#8a8a8a;margin:0;">Länken är giltig i ${minutes} minuter. Om du inte begärde den kan du ignorera det här mejlet.</p>
+</td></tr>
+</table>
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#9a9a9a;margin-top:16px;">${b.name}</div>
+</td></tr>
+</table>
+</body></html>`;
+}
+
 /** Issue a magic link and send the email. */
 export async function issueMagicLink(email) {
   const token = randomToken();
@@ -93,12 +150,9 @@ export async function issueMagicLink(email) {
   const minutes = settings.magic_link_minutes;
   await sendEmail({
     to: email,
-    subject: 'Your sign-in link',
-    text: `Sign in to Bakery Labels: ${url}\n\nThis link is valid for ${minutes} minutes.`,
-    html: `<p>Sign in to <strong>Bakery Labels</strong>:</p>
-<p><a href="${url}" style="display:inline-block;padding:10px 20px;background:#0a0a0a;color:#fafaf7;border-radius:999px;text-decoration:none">Sign in</a></p>
-<p style="color:#666;font-size:13px">Or paste this URL into your browser:<br><a href="${url}">${url}</a></p>
-<p style="color:#999;font-size:12px">This link is valid for ${minutes} minutes. If you didn't request it, ignore this email.</p>`,
+    subject: `Din inloggningslänk – ${brandName()}`,
+    text: magicLinkText(url, minutes),
+    html: magicLinkHtml(url, minutes),
   });
   return token;
 }
