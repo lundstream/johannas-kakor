@@ -104,6 +104,35 @@ addColumn('users', 'stripe_subscription_id', 'TEXT');
 addColumn('users', 'subscription_status', 'TEXT'); // raw Stripe status
 db.exec('CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id)');
 
+// ---- Phase 1.5 seed: comped partner + multi-slug free mode (idempotent) ----
+// Free mode supports multiple slugs, each tagged with a plan (consumed by the
+// watermark phase). Slug plans are server-seeded only — NOT in the admin write
+// whitelist — so they can't be changed by users/admins via the settings API.
+const COMP_PARTNER_EMAIL = 'johanna.bergstrom93@outlook.com';
+// Only correct the wrong 'trial' default; never clobber a deliberate later plan (e.g. 'paid').
+db.prepare("UPDATE users SET plan = 'free_comp' WHERE email = ? AND plan = 'trial'").run(COMP_PARTNER_EMAIL);
+
+const DEFAULT_FREE_SLUGS = [
+  { slug: 'johanna', plan: 'free_comp' }, // private comped link for the partner
+  { slug: 'prova', plan: 'trial' }, // public anonymous trial (watermarked later)
+];
+let freeSlugs = [];
+try {
+  freeSlugs = JSON.parse(db.prepare("SELECT value FROM app_settings WHERE key = 'free_mode_slugs'").get()?.value || '[]');
+  if (!Array.isArray(freeSlugs)) freeSlugs = [];
+} catch {
+  freeSlugs = [];
+}
+for (const def of DEFAULT_FREE_SLUGS) {
+  const existing = freeSlugs.find((s) => s && s.slug === def.slug);
+  if (existing) existing.plan = def.plan; // update in place, no duplicate
+  else freeSlugs.push({ ...def });
+}
+db.prepare(
+  `INSERT INTO app_settings(key, value) VALUES('free_mode_slugs', ?)
+   ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+).run(JSON.stringify(freeSlugs));
+
 export default db;
 
 export const queries = {

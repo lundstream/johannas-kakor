@@ -34,14 +34,28 @@ function HomeRoute() {
   return user ? <EditorPage /> : <LandingPage />;
 }
 
-/** Handles /:slug — renders free editor if slug matches free_mode_path and free mode is on. */
+/**
+ * Handles /:slug — renders the free editor when free mode is on and the slug is
+ * a configured free-mode slug. Supports multiple slugs (free_mode_slugs), and
+ * still honors the legacy single free_mode_path for back-compat.
+ */
 function FreeRoute() {
   const { slug } = useParams<{ slug: string }>();
   const cfg = useSiteConfig();
   const loaded = useSiteConfigLoaded();
   if (!loaded) return <Loading />;
   if (cfg.free_mode_enabled !== '1') return <Navigate to="/" replace />;
-  if (slug !== (cfg.free_mode_path || 'free')) return <Navigate to="/" replace />;
+
+  let slugs: { slug: string; plan?: string }[] = [];
+  try {
+    const parsed = JSON.parse(cfg.free_mode_slugs || '[]');
+    if (Array.isArray(parsed)) slugs = parsed;
+  } catch {
+    /* ignore malformed config */
+  }
+  const isConfiguredSlug = slugs.some((s) => s && s.slug === slug);
+  const isLegacySlug = slug === (cfg.free_mode_path || 'free');
+  if (!isConfiguredSlug && !isLegacySlug) return <Navigate to="/" replace />;
   return <FreeEditorPage />;
 }
 

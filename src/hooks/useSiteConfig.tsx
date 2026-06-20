@@ -11,6 +11,7 @@ const FALLBACK: SiteConfig = {
   default_locale: 'sv',
   free_mode_enabled: '0',
   free_mode_path: 'free',
+  free_mode_slugs: '[]',
 };
 
 type SiteConfigCtx = SiteConfig & { _loaded: boolean };

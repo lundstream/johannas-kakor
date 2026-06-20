@@ -5,12 +5,12 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 /**
  * Marketing-/startsida för utloggade besökare.
  * - Primär väg: "Skapa konto" / "Logga in" (→ /login)
- * - Gratis-alternativ: "Prova gratis" (→ /johanna, partnerns inloggningsfria läge)
+ * - Gratis-alternativ: "Prova gratis" (→ /prova, publik inloggningsfri trial)
  *
- * OBS: /johanna fungerar bara när free mode är aktiverat i admin
- * (free_mode_enabled = '1' och free_mode_path = 'johanna').
+ * OBS: /prova är den publika trial-sluggen (plan='trial', vattenmärks senare).
+ * Partnerlänken /johanna (plan='free_comp') lämnas orörd och fungerar separat.
  */
-const FREE_MODE_URL = '/johanna';
+const FREE_MODE_URL = '/prova';
 
 export default function LandingPage() {
   const site = useSiteConfig();

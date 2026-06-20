@@ -63,4 +63,6 @@ export interface SiteConfig {
   default_locale: string;
   free_mode_enabled: '0' | '1';
   free_mode_path: string;
+  /** JSON array string of { slug, plan } for multi-slug free mode. */
+  free_mode_slugs: string;
 }

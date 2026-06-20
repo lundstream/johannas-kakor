@@ -51,6 +51,8 @@ app.get('/api/public/site', (_req, res) => {
     default_locale: obj.default_locale || 'en',
     free_mode_enabled: obj.free_mode_enabled || '0',
     free_mode_path: obj.free_mode_path || 'free',
+    // Multi-slug free mode: JSON array of { slug, plan }. Server-seeded only.
+    free_mode_slugs: obj.free_mode_slugs || '[]',
   });
 });
 
