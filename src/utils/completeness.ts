@@ -78,12 +78,16 @@ export function checkCompleteness(label: LabelData): CompletenessResult {
     );
     req(
       'kontakt',
-      'Kontaktuppgift',
-      present(label, 'bakeryName', label.bakeryName),
+      'Kontaktuppgift (namn + adress)',
+      present(label, 'bakeryName', label.bakeryName) && nonEmpty(label.contactAddress),
       'Ange livsmedelsföretagarens namn och adress.',
     );
-    // No nutrition field exists yet (added in the premium nutrition step).
-    req('naring', 'Näringsdeklaration', false, 'Näringsdeklaration saknas (läggs till i premium-steget).');
+    req(
+      'naring',
+      'Näringsdeklaration',
+      !!label.nutrition?.perHundred,
+      'Näringsdeklaration saknas – generera den i näringssteget (premium).',
+    );
 
     // Conditional — advise, never hard-flag.
     adv('forvaring', 'Förvaringsanvisning', present(label, 'storage', label.storage), 'Kontrollera om förvaringsanvisning behövs.');

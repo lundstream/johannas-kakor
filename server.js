@@ -10,6 +10,7 @@ import { queries } from './db.js';
 import { createCheckoutSession, createPortalSession, handleWebhook } from './billing.js';
 import { isWatermarked } from './entitlements.js';
 import { renderLabel } from './export.js';
+import { importNutrition, nutritionMeta } from './nutrition-import.js';
 import {
   authMiddleware,
   requireAuth,
@@ -86,8 +87,83 @@ function listIngredientsWithAllergens() {
     id: i.id,
     name: i.name,
     allergens: tagsById.get(i.id) || [],
+    livsmedelsnummer: i.livsmedelsnummer || null,
   }));
 }
+
+/** Premium access = entitled (reuses the entitlement helper; paid-active, free_comp, admin). */
+function hasPremium(user) {
+  return !!user && !isWatermarked(user);
+}
+
+const NUTRITION_KEYS = ['energi_kj', 'energi_kcal', 'fett', 'mattat_fett', 'kolhydrat', 'sockerarter', 'protein', 'salt'];
+
+function rowGramsServer(row) {
+  const q = Number(row?.quantity);
+  if (!Number.isFinite(q) || q <= 0) return null;
+  if (row.unit === 'kg') return q * 1000;
+  if (row.unit === 'g') return q;
+  return null;
+}
+
+/** Compute the per-100g nutrition declaration from a recipe. Source values are
+ *  per-100g; contribution = value × g/100; normalised by färdig vikt (or raw sum). */
+function computeNutrition(recipe, finishedWeightG) {
+  const rows = recipe?.rows ?? [];
+  const numberByIngredient = new Map(
+    queries.listIngredientNumbers.all().map((r) => [r.id, r.livsmedelsnummer]),
+  );
+  const acc = Object.fromEntries(NUTRITION_KEYS.map((k) => [k, 0]));
+  let rawTotal = 0;
+  let unmapped = 0;
+  let mappedAny = false;
+
+  for (const r of rows) {
+    const g = rowGramsServer(r);
+    if (g == null) continue;
+    rawTotal += g;
+    const lnr = r.ingredientId ? numberByIngredient.get(r.ingredientId) : null;
+    const item = lnr ? queries.getNutritionItem.get(lnr) : null;
+    if (!item) {
+      unmapped++;
+      continue;
+    }
+    mappedAny = true;
+    for (const k of NUTRITION_KEYS) {
+      if (typeof item[k] === 'number') acc[k] += item[k] * (g / 100);
+    }
+  }
+
+  const basisWeight = finishedWeightG && finishedWeightG > 0 ? finishedWeightG : rawTotal;
+  if (!mappedAny || basisWeight <= 0) return null;
+
+  const f = 100 / basisWeight;
+  const round = (n, d) => {
+    const p = 10 ** d;
+    return Math.round(n * f * p) / p;
+  };
+  return {
+    perHundred: {
+      energiKj: round(acc.energi_kj, 0),
+      energiKcal: round(acc.energi_kcal, 0),
+      fett: round(acc.fett, 1),
+      mattatFett: round(acc.mattat_fett, 1),
+      kolhydrat: round(acc.kolhydrat, 1),
+      sockerarter: round(acc.sockerarter, 1),
+      protein: round(acc.protein, 1),
+      salt: round(acc.salt, 2),
+    },
+    basis: finishedWeightG && finishedWeightG > 0 ? 'finished' : 'raw',
+    totalWeightG: Math.round(basisWeight),
+    datasetVersion: nutritionMeta().version,
+    incomplete: unmapped > 0,
+    unmappedCount: unmapped,
+    computedAt: Date.now(),
+  };
+}
+
+/** Public: nutrition dataset version/meta (for CC BY attribution display). */
+app.get('/api/public/nutrition-meta', (_req, res) => res.json(nutritionMeta()));
 
 /** Public: ingredient list + allergen tags (reference data; used by the editor incl. free mode). */
 app.get('/api/public/ingredients', (_req, res) => {
@@ -325,6 +401,18 @@ app.put('/api/me/custom-ingredients', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Nutrition (premium) ----------
+
+app.post('/api/me/nutrition', requireAuth, (req, res) => {
+  if (!hasPremium(req.user)) return res.status(403).json({ error: 'premium_required' });
+  if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
+  const { recipe, finishedWeightG } = req.body || {};
+  if (!recipe || !Array.isArray(recipe.rows)) return res.status(400).json({ error: 'invalid_recipe' });
+  const declaration = computeNutrition(recipe, Number(finishedWeightG) || 0);
+  if (!declaration) return res.status(422).json({ error: 'no_data' });
+  res.json({ declaration });
+});
+
 // ---------- Data subject rights (self-service, GDPR) ----------
 
 /** Export ALL of the requesting user's own data as a downloadable JSON file. */
@@ -441,6 +529,29 @@ app.put('/api/admin/ingredients/:id/allergens', requireAdmin, (req, res) => {
   }
   res.json({ ok: true });
 });
+
+app.put('/api/admin/ingredients/:id/livsmedelsnummer', requireAdmin, (req, res) => {
+  const schema = z.object({ livsmedelsnummer: z.string().trim().max(40).optional() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  if (!queries.getIngredient.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  queries.setIngredientLivsmedelsnummer.run(parsed.data.livsmedelsnummer?.trim() || null, req.params.id);
+  res.json({ ok: true });
+});
+
+// Re-importable Livsmedelsdatabas import (operator drops a CSV/JSON file first).
+app.post('/api/admin/nutrition/import', requireAdmin, (req, res) => {
+  try {
+    const result = importNutrition({ version: req.body?.version });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    const known = ['no_file', 'empty_file', 'missing_key_columns'];
+    console.error('nutrition import failed:', e?.message || e);
+    res.status(400).json({ error: known.includes(e?.message) ? e.message : 'import_failed' });
+  }
+});
+
+app.get('/api/admin/nutrition/meta', requireAdmin, (_req, res) => res.json(nutritionMeta()));
 
 app.get('/api/admin/settings', requireAdmin, (_req, res) => {
   const all = queries.getAllSettings.all();

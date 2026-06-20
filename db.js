@@ -180,6 +180,21 @@ try {
   console.error('ingredient seed failed', e);
 }
 
+// ---- Phase D: shared nutrition dataset (Livsmedelsverket) + ingredient mapping ----
+db.exec(`
+CREATE TABLE IF NOT EXISTS nutrition_items (
+  livsmedelsnummer TEXT PRIMARY KEY,
+  namn TEXT NOT NULL,
+  energi_kj REAL, energi_kcal REAL,
+  fett REAL, mattat_fett REAL,
+  kolhydrat REAL, sockerarter REAL,
+  protein REAL, salt REAL,
+  raw_json TEXT
+);
+`);
+// Optional link from an ingredient to a dataset row (per-product mapping).
+addColumn('ingredients', 'livsmedelsnummer', 'TEXT');
+
 // ---- Phase A migration: rewrite stored label/template/custom blobs to Annex II ----
 // MANDEL -> NÖTTER (almond is part of group 8). SKALDJUR was ambiguous and is
 // dropped (surfaced for manual re-tag). Idempotent: a no-op once codes are gone.
@@ -299,11 +314,27 @@ export const queries = {
   ),
 
   // ingredients (Phase A)
-  listIngredients: db.prepare('SELECT id, name FROM ingredients ORDER BY sort, name'),
+  listIngredients: db.prepare('SELECT id, name, livsmedelsnummer FROM ingredients ORDER BY sort, name'),
   listIngredientAllergens: db.prepare('SELECT ingredient_id, code FROM ingredient_allergens'),
   getIngredient: db.prepare('SELECT id, name FROM ingredients WHERE id = ?'),
   clearIngredientAllergens: db.prepare('DELETE FROM ingredient_allergens WHERE ingredient_id = ?'),
   addIngredientAllergen: db.prepare('INSERT OR IGNORE INTO ingredient_allergens(ingredient_id, code) VALUES (?, ?)'),
+  setIngredientLivsmedelsnummer: db.prepare('UPDATE ingredients SET livsmedelsnummer = ? WHERE id = ?'),
+  listIngredientNumbers: db.prepare('SELECT id, livsmedelsnummer FROM ingredients WHERE livsmedelsnummer IS NOT NULL'),
+
+  // nutrition dataset (Phase D)
+  getNutritionItem: db.prepare('SELECT * FROM nutrition_items WHERE livsmedelsnummer = ?'),
+  upsertNutritionItem: db.prepare(
+    `INSERT INTO nutrition_items
+       (livsmedelsnummer, namn, energi_kj, energi_kcal, fett, mattat_fett, kolhydrat, sockerarter, protein, salt, raw_json)
+     VALUES (@livsmedelsnummer, @namn, @energi_kj, @energi_kcal, @fett, @mattat_fett, @kolhydrat, @sockerarter, @protein, @salt, @raw_json)
+     ON CONFLICT(livsmedelsnummer) DO UPDATE SET
+       namn=excluded.namn, energi_kj=excluded.energi_kj, energi_kcal=excluded.energi_kcal,
+       fett=excluded.fett, mattat_fett=excluded.mattat_fett, kolhydrat=excluded.kolhydrat,
+       sockerarter=excluded.sockerarter, protein=excluded.protein, salt=excluded.salt, raw_json=excluded.raw_json`
+  ),
+  clearNutrition: db.prepare('DELETE FROM nutrition_items'),
+  countNutrition: db.prepare('SELECT COUNT(*) AS n FROM nutrition_items'),
 
   // app settings
   getAllSettings: db.prepare('SELECT key, value FROM app_settings'),

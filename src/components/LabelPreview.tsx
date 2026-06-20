@@ -216,12 +216,18 @@ function Layout({
 
   // Each orderable field renders an independent block; iterated in label.fieldOrder.
   const blocks: Partial<Record<FieldKey, React.ReactNode>> = {
-    bakeryName: showBakery ? (
-      <div
-        className="uppercase tracking-[0.18em] text-[#000] opacity-80"
-        style={fieldStyle('bakeryName', metaPt * 0.78)}
-      >
-        {label.bakeryName}
+    bakeryName: showBakery || (label.contactAddress && label.contactAddress.trim()) ? (
+      <div className="text-[#000]">
+        {showBakery && (
+          <div className="uppercase tracking-[0.18em] opacity-80" style={fieldStyle('bakeryName', metaPt * 0.78)}>
+            {label.bakeryName}
+          </div>
+        )}
+        {label.contactAddress && label.contactAddress.trim() && (
+          <div className="whitespace-pre-line opacity-75" style={fieldStyle('bakeryName', metaPt * 0.7)}>
+            {label.contactAddress}
+          </div>
+        )}
       </div>
     ) : null,
     productName: showProduct ? (
@@ -392,6 +398,20 @@ function Layout({
           })}
         </div>
       </div>
+
+      {label.nutrition?.perHundred && (
+        <div
+          className="leading-[1.2] text-[#000]"
+          style={{ fontSize: `${(Math.max(5.5, bodyPt * 0.92) * pxPerMm) / 2.83465}px` }}
+        >
+          <span className="font-semibold">Näringsvärde per 100 g: </span>
+          Energi {label.nutrition.perHundred.energiKj} kJ / {label.nutrition.perHundred.energiKcal} kcal,
+          fett {label.nutrition.perHundred.fett} g (varav mättat {label.nutrition.perHundred.mattatFett} g),
+          kolhydrat {label.nutrition.perHundred.kolhydrat} g (varav sockerarter{' '}
+          {label.nutrition.perHundred.sockerarter} g), protein {label.nutrition.perHundred.protein} g,
+          salt {label.nutrition.perHundred.salt} g.
+        </div>
+      )}
 
       {(showCodes || watermark) && (
         <div className="mt-auto flex flex-col" style={{ gap: `${0.4 * pxPerMm}px` }}>

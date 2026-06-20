@@ -162,6 +162,33 @@ export interface RecipeRow {
 
 export interface RecipeConfig {
   rows: RecipeRow[];
+  /** Optional baked yield in grams; used to normalise nutrition per 100 g of finished product. */
+  finishedWeightG?: number;
+}
+
+/** Mandatory 1169/2011 per-100g nutrition values (legal order). */
+export interface NutritionValues {
+  energiKj: number;
+  energiKcal: number;
+  fett: number;
+  mattatFett: number;
+  kolhydrat: number;
+  sockerarter: number;
+  protein: number;
+  salt: number;
+}
+
+/** A computed nutrition declaration applied to a label (calculation from the recipe). */
+export interface NutritionDeclaration {
+  perHundred: NutritionValues;
+  /** 'finished' = normalised against entered färdig vikt; 'raw' = against summed input weight (estimate). */
+  basis: 'raw' | 'finished';
+  totalWeightG: number;
+  datasetVersion: string;
+  /** True when some recipe ingredients lacked nutrition data (totals may be incomplete). */
+  incomplete: boolean;
+  unmappedCount: number;
+  computedAt: number;
 }
 
 export interface LabelData {
@@ -188,6 +215,10 @@ export interface LabelData {
   recipe: RecipeConfig;
   /** Drives the mode-aware completeness checker. Internal key; Swedish values. */
   packagingType: 'färdigförpackad' | 'inte färdigförpackad';
+  /** Optional food business operator address (prepacked labelling needs name + address). */
+  contactAddress?: string;
+  /** Applied nutrition declaration (premium); presence makes the checker mark näringsdeklaration as present. */
+  nutrition?: NutritionDeclaration;
   logo: LogoConfig;
   qr: QrConfig;
   barcode: BarcodeConfig;

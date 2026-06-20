@@ -146,6 +146,43 @@ Inloggningslänkar skickas via SMTP (Gmail / Google Workspace). Konfigureras med
 - Standard: `smtp.gmail.com:587` (STARTTLS). Utan SMTP-konfig loggas mejlen bara
   till konsolen (utveckling).
 
+## Näringsdeklaration (Livsmedelsverket)
+
+Näringsvärden beräknas från receptet (Phase B) mot en lokalt importerad kopia av
+**Livsmedelsverkets Livsmedelsdatabas** – ingen live-API-anrop per beräkning.
+
+**Importera datan (operatör):**
+1. Lägg en export från Livsmedelsdatabasen i `NUTRITION_DIR`
+   (standard: `<data>/livsmedelsdatabasen/`), som **CSV eller JSON**.
+2. Gå till `/admin`, ange version (t.ex. `2024-01`) och klicka **Importera**.
+   Re-import skriver över datan (versionsstämplas).
+
+**Förväntat filformat** (per 100 g). CSV med `;` eller `,` som avgränsare och
+decimalkomma stöds; svenska rubriker matchas automatiskt. Nödvändiga kolumner:
+
+| Fält | Accepterade rubriker (urval) |
+| --- | --- |
+| livsmedelsnummer | `Livsmedelsnummer`, `Nummer` |
+| namn | `Livsmedelsnamn`, `Namn` |
+| energi (kcal) | `Energi (kcal)` |
+| energi (kJ) | `Energi (kJ)` |
+| fett | `Fett` |
+| varav mättat | `Mättat fett`, `Summa mättade fettsyror` |
+| kolhydrat | `Kolhydrater` |
+| varav socker | `Sockerarter` |
+| protein | `Protein` |
+| salt | `Salt` |
+
+(JSON: en array av objekt med dessa fält, eller nycklarna `livsmedelsnummer, namn,
+energi_kcal, energi_kj, fett, mattat_fett, kolhydrat, sockerarter, protein, salt`.)
+
+- **Källvärden ändras aldrig** – de lagras som importerade. Per-recept-värden är en
+  **beräkning** (per 100 g × gram, normaliserat). Attribution visas där värden visas:
+  *"Källa: Livsmedelsverkets Livsmedelsdatabas version [X]"* (CC BY 4.0).
+- Koppla varje ingrediens till ett **livsmedelsnummer** i `/admin`.
+- Funktionen är **premium** (kräver betald plan / komp). Excel: exportera till CSV/JSON
+  först (xlsx läses inte direkt).
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).

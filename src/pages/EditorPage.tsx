@@ -20,6 +20,7 @@ import { FieldOrderPanel } from '../components/FieldOrderPanel';
 import { LegalLinks } from '../components/LegalPage';
 import { RecipePanel } from '../components/RecipePanel';
 import { CompletenessPanel } from '../components/CompletenessPanel';
+import { NutritionPanel } from '../components/NutritionPanel';
 import { collectAllergens } from '../utils/allergens';
 import { printNow } from '../utils/print';
 import { exportLabelsToPdf, exportLabelToPng } from '../utils/pdf';
@@ -261,6 +262,14 @@ export default function EditorPage() {
                   onChange={(e) => updateLabel('bakeryName', e.target.value)}
                 />
               </Field>
+              <Field label="Adress / kontaktuppgift" className="col-span-2" hint="Livsmedelsföretagarens namn och adress (krävs för färdigförpackat). Stöder radbrytning.">
+                <textarea
+                  className="input min-h-[44px] resize-y"
+                  rows={2}
+                  value={label.contactAddress ?? ''}
+                  onChange={(e) => updateLabel('contactAddress', e.target.value)}
+                />
+              </Field>
               <Field label="Produktbeskrivning" className="col-span-2" hint="Kort beskrivning som visas under produktnamnet. Stöder radbrytning.">
                 <textarea
                   className="input min-h-[44px] resize-y"
@@ -371,6 +380,20 @@ export default function EditorPage() {
               onChange={(r) => updateLabel('recipe', r)}
               customIngredients={customIngredients}
               onApply={(ings) => updateLabel('ingredients', ings)}
+            />
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-3 font-display text-base font-semibold">Näringsdeklaration</h2>
+            <NutritionPanel
+              premium={!!user && !user.watermarked}
+              recipe={label.recipe ?? { rows: [] }}
+              nutrition={label.nutrition}
+              onChangeFinishedWeight={(g) =>
+                updateLabel('recipe', { ...(label.recipe ?? { rows: [] }), finishedWeightG: g })
+              }
+              onApply={(decl) => updateLabel('nutrition', decl)}
+              onClear={() => updateLabel('nutrition', undefined)}
             />
           </div>
 
