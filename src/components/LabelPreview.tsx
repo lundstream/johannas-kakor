@@ -210,6 +210,9 @@ function Layout({
   const metaJustify = align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
   const fieldGap = gap !== '0px' ? gap : '0.6mm';
   const showCodes = label.qr.enabled || label.barcode.enabled;
+  // Intrusive watermark: large repeated diagonal brand text across the whole label.
+  const wmBase = Math.min(label.size.widthMm, label.size.heightMm);
+  const wmFontPx = Math.max(9, wmBase * 0.13 * pxPerMm);
 
   // Each orderable field renders an independent block; iterated in label.fieldOrder.
   const blocks: Partial<Record<FieldKey, React.ReactNode>> = {
@@ -334,6 +337,44 @@ function Layout({
 
   return (
     <div className="flex h-full w-full flex-col" style={{ gap: fieldGap }}>
+      {watermark && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+          style={{ zIndex: 5 }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              inset: '-50%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: `${wmFontPx * 0.85}px`,
+              transform: 'rotate(-30deg)',
+              opacity: 0.22,
+            }}
+          >
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  whiteSpace: 'nowrap',
+                  fontFamily: FONT_STACKS.inter,
+                  fontWeight: 800,
+                  fontSize: `${wmFontPx}px`,
+                  letterSpacing: '0.06em',
+                  lineHeight: 1,
+                  color: '#000',
+                }}
+              >
+                ENKEL ETIKETT&nbsp;&nbsp;·&nbsp;&nbsp;ENKEL ETIKETT&nbsp;&nbsp;·&nbsp;&nbsp;ENKEL ETIKETT
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {stackTop && label.logo.dataUrl && (
         <div className={`flex w-full ${pos === 'top-right' ? 'justify-end' : pos === 'top-left' ? 'justify-start' : 'justify-center'}`}>
           <Logo label={label} pxPerMm={pxPerMm} />
