@@ -183,6 +183,39 @@ energi_kcal, energi_kj, fett, mattat_fett, kolhydrat, sockerarter, protein, salt
 - Funktionen är **premium** (kräver betald plan / komp). Excel: exportera till CSV/JSON
   först (xlsx läses inte direkt).
 
+## Lokal AI-assistent (BETA, premium)
+
+Två funktioner delar en **server-side Ollama-klient** (lokal inferens på egen
+GPU-box) – webbläsaren anropar aldrig Ollama:
+
+1. **AI-import av recept** – klistra in ett recept, modellen extraherar enbart
+   `{name, quantity, unit}`. Kod (inte modellen) gör mappning till ingrediens-DB
+   (Fas A-allergener), enhets-/densitetsomvandling till gram, och viktsortering
+   (Fas B). Resultatet är ett **utkast som måste granskas** innan det används.
+2. **AI-mappningshjälp** (admin) – föreslår `livsmedelsnummer` genom **deterministisk
+   fuzzy-matchning först**; bara tvetydiga fall rankas av modellen, och **endast
+   bland verkliga kandidater** (modellen hittar aldrig på ett nummer). Operatören
+   bekräftar alltid.
+
+**AI-förtroendegräns:** modellen extraherar/rangordnar bara. Allergener, vikter,
+näringsvärden och nummer bestäms alltid av deterministisk, DB-baserad kod.
+
+**Konfiguration (env):**
+
+| Variabel | Standard | Beskrivning |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://192.168.1.100:11434` | Inferens-boxens adress (LAN). |
+| `OLLAMA_MODEL` | `gemma4:e4b` | Modell (utbytbar). |
+| `OLLAMA_NUM_CTX` | `8192` | Kontextfönster (native `/api/chat`; num_ctx respekteras). |
+| `OLLAMA_TIMEOUT_MS` | `45000` | Timeout innan fallback till manuellt. |
+
+- Native `/api/chat` används (OpenAI-kompatibla endpointen ignorerar `num_ctx`).
+  `think:false` stänger av modellens resonemang; strip + schema-validering som backstopp.
+- På inferens-boxen: kör Ollama med `OLLAMA_HOST=0.0.0.0` så app-servern når den på
+  LAN. **Exponera inte Ollama publikt.**
+- Om boxen är avstängd/onåbar visas ett tydligt meddelande och du faller tillbaka till
+  manuell inmatning. Texten bearbetas **lokalt** – inget nytt personuppgiftsbiträde.
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).

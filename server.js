@@ -11,6 +11,7 @@ import { createCheckoutSession, createPortalSession, handleWebhook } from './bil
 import { isWatermarked } from './entitlements.js';
 import { renderLabel } from './export.js';
 import { importNutrition, nutritionMeta } from './nutrition-import.js';
+import { chatJSON, ollamaAvailable } from './ollama.js';
 import {
   authMiddleware,
   requireAuth,
@@ -413,6 +414,128 @@ app.post('/api/me/nutrition', requireAuth, (req, res) => {
   res.json({ declaration });
 });
 
+// ---------- Local AI assist (premium, BETA) ----------
+
+/** AI availability (premium) — drives the BETA UI's "tillgänglig/inte tillgänglig" state. */
+app.get('/api/me/ai-status', requireAuth, async (req, res) => {
+  if (!hasPremium(req.user)) return res.json({ premium: false, available: false });
+  res.json({ premium: true, available: await ollamaAvailable() });
+});
+
+// Capability 1: extract pasted recipe text -> [{name, quantity, unit}] (extraction only).
+const RECIPE_SCHEMA = {
+  type: 'object',
+  properties: {
+    ingredients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { name: { type: 'string' }, quantity: { type: 'number' }, unit: { type: 'string' } },
+        required: ['name', 'quantity', 'unit'],
+      },
+    },
+  },
+  required: ['ingredients'],
+};
+const recipeZod = z.object({
+  ingredients: z
+    .array(z.object({ name: z.string(), quantity: z.number(), unit: z.string() }))
+    .max(200),
+});
+
+app.post('/api/me/recipe-import', requireAuth, async (req, res) => {
+  if (!hasPremium(req.user)) return res.status(403).json({ error: 'premium_required' });
+  const text = String(req.body?.text ?? '').slice(0, 8000); // clamp untrusted input
+  if (!text.trim()) return res.status(400).json({ error: 'empty' });
+  try {
+    const raw = await chatJSON({
+      schema: RECIPE_SCHEMA,
+      system:
+        'Du extraherar ingredienser ur ett recept till JSON {ingredients:[{name,quantity,unit}]}. ' +
+        'name = ingrediensens namn, quantity = mängd som tal, unit = enhet (g, kg, dl, ml, msk, tsk, krm, st). ' +
+        'Hitta inte på värden, bedöm inte allergener och lägg inte till något som inte står i texten.',
+      user: text,
+    });
+    const parsed = recipeZod.safeParse(raw);
+    if (!parsed.success) return res.status(422).json({ error: 'bad_output' });
+    const ingredients = parsed.data.ingredients
+      .map((i) => ({
+        name: String(i.name).slice(0, 120).trim(),
+        quantity: Number.isFinite(i.quantity) ? i.quantity : 0,
+        unit: String(i.unit).slice(0, 12).trim().toLowerCase(),
+      }))
+      .filter((i) => i.name);
+    res.json({ ingredients });
+  } catch (e) {
+    if (e?.message === 'ollama_unreachable') return res.status(503).json({ error: 'ai_unavailable' });
+    console.error('recipe-import failed:', e?.message || e);
+    res.status(502).json({ error: 'ai_failed' });
+  }
+});
+
+// Capability 2 helpers: deterministic fuzzy match + variant detection.
+function normName(s) {
+  return String(s || '').toLowerCase().replace(/[^a-zåäö0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function nameTokens(s) {
+  return normName(s).split(' ').filter(Boolean);
+}
+function bigrams(s) {
+  const x = normName(s).replace(/ /g, '');
+  const r = [];
+  for (let i = 0; i < x.length - 1; i++) r.push(x.slice(i, i + 2));
+  return r;
+}
+function dice(a, b) {
+  const A = bigrams(a);
+  const Bg = bigrams(b);
+  if (!A.length || !Bg.length) return 0;
+  const m = new Map();
+  for (const g of Bg) m.set(g, (m.get(g) || 0) + 1);
+  let inter = 0;
+  for (const g of A) {
+    const c = m.get(g);
+    if (c > 0) { inter++; m.set(g, c - 1); }
+  }
+  return (2 * inter) / (A.length + Bg.length);
+}
+// Hybrid: token containment (handles "Strösocker"~"Socker", "Smör"~"Smör, normalsaltat")
+// + character-bigram similarity (robust to Swedish compound words). 0..1.
+function scoreMatch(ingName, candName) {
+  const it = nameTokens(ingName);
+  if (!it.length) return 0;
+  const ct = nameTokens(candName);
+  const cset = new Set(ct);
+  let hit = 0;
+  for (const t of it) {
+    if (cset.has(t)) { hit++; continue; }
+    if (ct.some((c) => (c.startsWith(t) || t.startsWith(c)) && Math.min(c.length, t.length) >= 3)) { hit++; continue; }
+    if (ct.some((c) => c.length >= 4 && t.includes(c))) { hit++; continue; }
+  }
+  const tok = hit / it.length;
+  let score = 0.6 * tok + 0.4 * dice(ingName, candName);
+  if (ct[0] && it[0] && ct[0] === it[0]) score += 0.05;
+  return Math.min(1, score);
+}
+function detectVariants(cands) {
+  const text = cands.map((c) => normName(c.namn)).join(' | ');
+  const flags = [];
+  if (/\bsaltat\b/.test(text) && /\bosaltat\b/.test(text)) flags.push('saltat/osaltat (påverkar salt)');
+  const milk = ['minimjölk', 'lättmjölk', 'mellanmjölk', 'standardmjölk'].filter((m) => text.includes(m));
+  if (milk.length >= 2) flags.push('mjölksort (påverkar fett): ' + milk.join('/'));
+  if (/\bfullkorn\b/.test(text) && /(vitt|siktat|special)/.test(text)) flags.push('fullkorn/siktat');
+  return flags;
+}
+const RANK_SCHEMA = {
+  type: 'object',
+  properties: { livsmedelsnummer: { type: 'string' }, reason: { type: 'string' } },
+  required: ['livsmedelsnummer'],
+};
+const rankZod = z.object({
+  livsmedelsnummer: z.union([z.string(), z.number()]).transform(String),
+  reason: z.string().optional(),
+});
+
 // ---------- Data subject rights (self-service, GDPR) ----------
 
 /** Export ALL of the requesting user's own data as a downloadable JSON file. */
@@ -537,6 +660,60 @@ app.put('/api/admin/ingredients/:id/livsmedelsnummer', requireAdmin, (req, res) 
   if (!queries.getIngredient.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
   queries.setIngredientLivsmedelsnummer.run(parsed.data.livsmedelsnummer?.trim() || null, req.params.id);
   res.json({ ok: true });
+});
+
+// Capability 2: suggest a livsmedelsnummer mapping (fuzzy first, Gemma ranks the
+// ambiguous remainder among REAL candidates only — never generates a number).
+app.post('/api/admin/ingredients/:id/suggest-mapping', requireAdmin, async (req, res) => {
+  const ing = queries.getIngredient.get(req.params.id);
+  if (!ing) return res.status(404).json({ error: 'not_found' });
+  if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
+
+  const ranked = queries.listNutritionNames
+    .all()
+    .map((r) => ({ livsmedelsnummer: r.livsmedelsnummer, namn: r.namn, score: scoreMatch(ing.name, r.namn) }))
+    .sort((a, b) => b.score - a.score);
+  const topN = ranked.slice(0, 6);
+  const best = topN[0];
+  const second = topN[1];
+  const variants = detectVariants(topN);
+
+  let suggestion = null;
+  let usedModel = false;
+
+  if (best && best.score >= 0.85 && (!second || best.score - second.score >= 0.15) && variants.length === 0) {
+    suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'hög' };
+  } else if (best && best.score >= 0.25) {
+    try {
+      const list = topN.map((c) => `${c.livsmedelsnummer}: ${c.namn}`).join('\n');
+      const raw = await chatJSON({
+        schema: RANK_SCHEMA,
+        system:
+          'Välj det livsmedel ur kandidatlistan som bäst motsvarar ingrediensen. Svara med JSON ' +
+          '{livsmedelsnummer, reason}. livsmedelsnummer MÅSTE vara ett av numren i listan – hitta inte på nummer. reason kort på svenska.',
+        user: `Ingrediens: ${ing.name}\nKandidater:\n${list}`,
+      });
+      const z2 = rankZod.safeParse(raw);
+      // HARD CONSTRAINT: only accept an id that was in the candidate list.
+      const picked = z2.success ? topN.find((c) => String(c.livsmedelsnummer) === z2.data.livsmedelsnummer) : null;
+      if (picked) {
+        suggestion = { livsmedelsnummer: picked.livsmedelsnummer, namn: picked.namn, confidence: 'medel', reason: (z2.data.reason || '').slice(0, 200) };
+        usedModel = true;
+      } else {
+        suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'låg' };
+      }
+    } catch {
+      // Ollama unavailable — still offer the deterministic fuzzy best (low confidence).
+      suggestion = { livsmedelsnummer: best.livsmedelsnummer, namn: best.namn, confidence: 'låg' };
+    }
+  }
+
+  res.json({
+    suggestion,
+    candidates: topN.map((c) => ({ livsmedelsnummer: c.livsmedelsnummer, namn: c.namn })),
+    variants,
+    usedModel,
+  });
 });
 
 // Re-importable Livsmedelsdatabas import (operator drops a CSV/JSON file first).

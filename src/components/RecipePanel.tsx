@@ -5,6 +5,7 @@ import { searchIngredients } from '../data/ingredients';
 import { useIngredients } from '../hooks/useIngredients';
 import { tokenizeIngredient } from '../utils/allergens';
 import { generateDeclaration } from '../utils/recipe';
+import { AiRecipeImport } from './AiRecipeImport';
 
 interface Props {
   recipe: RecipeConfig;
@@ -12,6 +13,8 @@ interface Props {
   customIngredients: Ingredient[];
   /** Apply the generated declaration as the label's ingredient list. */
   onApply: (ingredients: Ingredient[]) => void;
+  /** Premium tenants get the BETA AI recipe import. */
+  premium?: boolean;
 }
 
 /** Renders an ingredient name with the specific allergen words in VERSALER (Phase A). */
@@ -104,7 +107,7 @@ function IngredientField({
   );
 }
 
-export function RecipePanel({ recipe, onChange, customIngredients, onApply }: Props) {
+export function RecipePanel({ recipe, onChange, customIngredients, onApply, premium }: Props) {
   const rows = recipe.rows ?? [];
   const setRows = (next: RecipeRow[]) => onChange({ ...recipe, rows: next });
   const patchRow = (id: string, patch: Partial<RecipeRow>) =>
@@ -140,6 +143,13 @@ export function RecipePanel({ recipe, onChange, customIngredients, onApply }: Pr
         Ange ingredienser med vikt så skapas ingrediensförteckningen automatiskt i mängdordning
         (fallande efter vikt). Hjälper dig – ingen garanti, granska alltid resultatet.
       </p>
+
+      {premium && (
+        <AiRecipeImport
+          customIngredients={customIngredients}
+          onApplyRows={(rows) => onChange({ ...recipe, rows })}
+        />
+      )}
 
       {/* Rows */}
       <div className="flex flex-col gap-3">

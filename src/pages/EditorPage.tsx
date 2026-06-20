@@ -380,6 +380,7 @@ export default function EditorPage() {
               onChange={(r) => updateLabel('recipe', r)}
               customIngredients={customIngredients}
               onApply={(ings) => updateLabel('ingredients', ings)}
+              premium={!!user && !user.watermarked}
             />
           </div>
 

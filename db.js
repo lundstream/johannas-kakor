@@ -335,6 +335,7 @@ export const queries = {
   ),
   clearNutrition: db.prepare('DELETE FROM nutrition_items'),
   countNutrition: db.prepare('SELECT COUNT(*) AS n FROM nutrition_items'),
+  listNutritionNames: db.prepare('SELECT livsmedelsnummer, namn FROM nutrition_items'),
 
   // app settings
   getAllSettings: db.prepare('SELECT key, value FROM app_settings'),

@@ -27,6 +27,24 @@ export function IngredientTagEditor() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
+  type Suggestion = {
+    suggestion: { livsmedelsnummer: string; namn: string; confidence: string; reason?: string } | null;
+    candidates: { livsmedelsnummer: string; namn: string }[];
+    variants: string[];
+    usedModel: boolean;
+  };
+  const [sugg, setSugg] = useState<Record<string, Suggestion | 'loading' | 'error'>>({});
+
+  const suggest = async (id: string) => {
+    setSugg((p) => ({ ...p, [id]: 'loading' }));
+    try {
+      const r = await api.post<Suggestion>(`/api/admin/ingredients/${id}/suggest-mapping`, {});
+      setSugg((p) => ({ ...p, [id]: r }));
+    } catch {
+      setSugg((p) => ({ ...p, [id]: 'error' }));
+    }
+  };
+
   const loadMeta = () =>
     api.get<Meta>('/api/admin/nutrition/meta').then(setMeta).catch(() => {});
 
@@ -129,13 +147,71 @@ export function IngredientTagEditor() {
             <li key={row.id} className="rounded-xl border border-line p-2.5">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{row.name}</span>
-                <input
-                  className="input w-32 py-1 text-xs"
-                  placeholder="Livsmedelsnr"
-                  defaultValue={row.livsmedelsnummer ?? ''}
-                  onBlur={(e) => saveNumber(row, e.target.value)}
-                />
+                <div className="flex items-center gap-1">
+                  <input
+                    key={row.livsmedelsnummer ?? 'empty'}
+                    className="input w-28 py-1 text-xs"
+                    placeholder="Livsmedelsnr"
+                    defaultValue={row.livsmedelsnummer ?? ''}
+                    onBlur={(e) => saveNumber(row, e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost whitespace-nowrap text-[11px]"
+                    onClick={() => suggest(row.id)}
+                  >
+                    Föreslå mappning
+                  </button>
+                </div>
               </div>
+
+              {sugg[row.id] === 'loading' && <div className="mb-1.5 text-xs text-ink/50">Söker förslag…</div>}
+              {sugg[row.id] === 'error' && <div className="mb-1.5 text-xs text-amber-700">Kunde inte hämta förslag.</div>}
+              {sugg[row.id] && typeof sugg[row.id] === 'object' && (() => {
+                const s = sugg[row.id] as Suggestion;
+                return (
+                  <div className="mb-2 rounded-lg border border-line bg-cream/50 p-2 text-xs">
+                    {s.suggestion ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>
+                          Förslag: <strong>{s.suggestion.namn}</strong> ({s.suggestion.livsmedelsnummer}) ·{' '}
+                          {s.suggestion.confidence}
+                          {s.usedModel ? ' · AI' : ''}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-primary px-2 py-0.5 text-[11px]"
+                          onClick={() => { saveNumber(row, s.suggestion!.livsmedelsnummer); setSugg((p) => ({ ...p, [row.id]: { ...s, suggestion: null } })); }}
+                        >
+                          Använd
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-ink/60">Inget tydligt förslag – välj bland kandidater nedan.</div>
+                    )}
+                    {s.suggestion?.reason && <div className="mt-1 text-ink/55">{s.suggestion.reason}</div>}
+                    {s.variants.length > 0 && (
+                      <div className="mt-1 text-amber-700">Flera varianter – bekräfta: {s.variants.join('; ')}</div>
+                    )}
+                    {s.candidates.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {s.candidates.map((c) => (
+                          <button
+                            key={c.livsmedelsnummer}
+                            type="button"
+                            className="rounded-full border border-line bg-white px-2 py-0.5 text-[10px] hover:bg-cream"
+                            title={`Använd ${c.namn}`}
+                            onClick={() => { saveNumber(row, c.livsmedelsnummer); setSugg((p) => ({ ...p, [row.id]: { ...s, suggestion: null } })); }}
+                          >
+                            {c.namn} ({c.livsmedelsnummer})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="flex flex-wrap gap-1">
                 {ALLERGENS.map((a) => {
                   const active = row.allergens.includes(a.code);
