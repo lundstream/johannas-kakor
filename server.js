@@ -303,6 +303,50 @@ app.put('/api/me/custom-ingredients', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Data subject rights (self-service, GDPR) ----------
+
+/** Export ALL of the requesting user's own data as a downloadable JSON file. */
+app.get('/api/me/export', requireAuth, (req, res) => {
+  const u = req.user;
+  const labelRow = queries.getLabel.get(u.id);
+  const templates = queries.listTemplates.all(u.id);
+  const customRow = queries.getCustomIngredients.get(u.id);
+  const data = {
+    exported_at: new Date().toISOString(),
+    account: publicUser(u),
+    label: labelRow ? JSON.parse(labelRow.data) : null,
+    templates: templates.map((t) => ({
+      id: t.id,
+      name: t.name,
+      data: JSON.parse(t.data),
+      createdAt: t.created_at,
+    })),
+    custom_ingredients: customRow ? JSON.parse(customRow.data) : [],
+  };
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="enkel-etikett-mina-uppgifter.json"');
+  res.send(JSON.stringify(data, null, 2));
+});
+
+/** Self-service account deletion. Hard delete; FK cascade removes the user's rows. */
+app.delete('/api/me', requireAuth, (req, res) => {
+  const u = req.user;
+  // Respect the last-admin guard (mirrors the admin delete route).
+  if (u.role === 'admin') {
+    const admins = queries.listUsers.all().filter((a) => a.role === 'admin');
+    if (admins.length <= 1) return res.status(400).json({ error: 'last_admin' });
+  }
+  // Block while a Stripe subscription is live, to avoid dangling billing.
+  // FLAGGED: this blocks deletion; it does NOT call Stripe to cancel.
+  if (['active', 'trialing', 'past_due'].includes(u.subscription_status)) {
+    return res.status(409).json({ error: 'active_subscription' });
+  }
+  destroySession(req.sessionId);
+  clearSessionCookie(res);
+  queries.deleteUser.run(u.id); // cascade: labels, templates, custom ingredients, sessions
+  res.json({ ok: true });
+});
+
 // ---------- Admin ----------
 
 app.get('/api/admin/users', requireAdmin, (_req, res) => {

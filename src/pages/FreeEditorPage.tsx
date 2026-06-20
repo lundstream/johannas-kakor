@@ -6,6 +6,7 @@ import { createBlankLabel, defaultFieldStyles, normalizeFieldOrder, PRESET_TEMPL
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Field } from '../components/Field';
 import { LabelExact, LabelPreview } from '../components/LabelPreview';
+import { LegalLinks } from '../components/LegalPage';
 import { IngredientPicker } from '../components/IngredientPicker';
 import { IngredientList } from '../components/IngredientList';
 import { LogoUploader } from '../components/LogoUploader';
@@ -336,18 +337,21 @@ export default function FreeEditorPage() {
       </div>
 
       <footer className="border-t border-line bg-paper py-6">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-center gap-3 px-5 text-xs text-ink/50">
-          {site.instagram_url && (
-            <a href={site.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Instagram"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-line text-ink/70 transition hover:bg-ink hover:text-paper hover:border-ink">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-              </svg>
-            </a>
-          )}
-          <span>{site.footer_text || `${site.site_name} · ${site.header_tagline}`}</span>
+        <div className="mx-auto flex max-w-[1400px] flex-col items-center gap-3 px-5 text-xs text-ink/50">
+          <div className="flex items-center gap-3">
+            {site.instagram_url && (
+              <a href={site.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Instagram"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-line text-ink/70 transition hover:bg-ink hover:text-paper hover:border-ink">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                </svg>
+              </a>
+            )}
+            <span>{site.footer_text || `${site.site_name} · ${site.header_tagline}`}</span>
+          </div>
+          <LegalLinks />
         </div>
       </footer>
     </div>

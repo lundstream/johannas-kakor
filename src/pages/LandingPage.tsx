@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { LegalLinks } from '../components/LegalPage';
 
 /**
  * Marketing-/startsida för utloggade besökare.
@@ -214,7 +215,8 @@ export default function LandingPage() {
 
       {/* ---------- Sidfot ---------- */}
       <footer className="border-t border-line bg-paper py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-5 text-xs text-ink/50 sm:flex-row">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-center gap-4 px-5 text-xs text-ink/50">
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           {site.instagram_url && (
             <a
               href={site.instagram_url}
@@ -231,6 +233,8 @@ export default function LandingPage() {
             </a>
           )}
           <span>{site.footer_text || `${name} · ${site.header_tagline}`}</span>
+        </div>
+        <LegalLinks />
         </div>
       </footer>
     </div>

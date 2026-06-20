@@ -5,12 +5,10 @@
   "session_days": 30,
   "magic_link_minutes": 15,
   "base_url": "http://localhost:3050",
-  "resend_api_key": "",
-  "email_from": "Bakery Labels <noreply@example.com>",
-  "google": {
-    "enabled": false,
-    "client_id": "",
-    "client_secret": ""
-  },
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "smtp_user": "",
+  "smtp_pass": "",
+  "email_from": "Enkel Etikett <noreply@example.com>",
   "first_admin_email": ""
 }

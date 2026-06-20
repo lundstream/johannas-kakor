@@ -7,7 +7,7 @@ const SETTINGS_PATH = path.join(__dirname, 'settings.json');
 
 // Config precedence: environment variables (production / Docker) override
 // settings.json, which is an optional convenience for local development.
-// Secrets (Stripe, Resend, session) are expected from env in production —
+// Secrets (Stripe, SMTP, session) are expected from env in production —
 // see .env.example. settings.json is no longer required to boot.
 const fileSettings = fs.existsSync(SETTINGS_PATH)
   ? JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'))

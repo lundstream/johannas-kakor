@@ -17,6 +17,7 @@ import { Toolbar } from '../components/Toolbar';
 import { TypographyPanel } from '../components/TypographyPanel';
 import { FieldStylePanel } from '../components/FieldStylePanel';
 import { FieldOrderPanel } from '../components/FieldOrderPanel';
+import { LegalLinks } from '../components/LegalPage';
 import { collectAllergens } from '../utils/allergens';
 import { printNow } from '../utils/print';
 import { exportLabelsToPdf, exportLabelToPng } from '../utils/pdf';
@@ -218,10 +219,11 @@ export default function EditorPage() {
             />
             <div className="hidden items-center gap-2 border-l border-line pl-3 text-xs lg:flex">
               <span className="text-ink/60">{user?.email}</span>
+              <Link to="/konto" className="btn btn-ghost text-xs">Konto</Link>
               {user?.role === 'admin' && (
                 <Link to="/admin" className="btn btn-ghost text-xs">Admin</Link>
               )}
-              <button onClick={() => logout()} className="btn btn-ghost text-xs">Sign out</button>
+              <button onClick={() => logout()} className="btn btn-ghost text-xs">Logga ut</button>
             </div>
           </div>
         </div>
@@ -475,23 +477,26 @@ export default function EditorPage() {
       <PrintRoot label={label} copies={label.copies} watermark={!!user?.watermarked} />
 
       <footer className="border-t border-line bg-paper py-6">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-center gap-3 px-5 text-xs text-ink/50">
-          {site.instagram_url && (
-            <a
-              href={site.instagram_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-line text-ink/70 transition hover:bg-ink hover:text-paper hover:border-ink"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-              </svg>
-            </a>
-          )}
-          <span>{site.footer_text || `${site.site_name} · ${site.header_tagline}`}</span>
+        <div className="mx-auto flex max-w-[1400px] flex-col items-center gap-3 px-5 text-xs text-ink/50">
+          <div className="flex items-center gap-3">
+            {site.instagram_url && (
+              <a
+                href={site.instagram_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-line text-ink/70 transition hover:bg-ink hover:text-paper hover:border-ink"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                </svg>
+              </a>
+            )}
+            <span>{site.footer_text || `${site.site_name} · ${site.header_tagline}`}</span>
+          </div>
+          <LegalLinks />
         </div>
       </footer>
     </div>
