@@ -165,7 +165,7 @@ export default function AdminPage() {
                   <label className="flex flex-col gap-1">
                     <span className="label">URL path</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-ink/50 text-xs whitespace-nowrap">kakor.lundstream.net/</span>
+                      <span className="text-ink/50 text-xs whitespace-nowrap">{window.location.host}/</span>
                       <input
                         className="input"
                         value={settings.free_mode_path || 'free'}
@@ -183,7 +183,7 @@ export default function AdminPage() {
                         rel="noopener noreferrer"
                         className="underline underline-offset-2 hover:text-ink"
                       >
-                        kakor.lundstream.net/{settings.free_mode_path || 'free'}
+                        {window.location.host}/{settings.free_mode_path || 'free'}
                       </a>
                     </div>
                   )}

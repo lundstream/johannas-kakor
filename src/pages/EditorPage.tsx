@@ -194,7 +194,7 @@ export default function EditorPage() {
   return (
     <div className="min-h-full">
       {/* Header */}
-      <header className="border-b border-line bg-paper/80 backdrop-blur sticky top-0 z-30">
+      <header className="border-b border-line bg-paper/80 backdrop-blur lg:sticky lg:top-0 z-30">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-5 py-3">
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-paper">
