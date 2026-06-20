@@ -17,6 +17,8 @@ const ENTITLED_STATUSES = new Set(['active', 'trialing']);
 
 export function isWatermarked(tenant) {
   if (!tenant) return true;
+  // Operators (admins) never get watermarked output, regardless of plan.
+  if (tenant.role === 'admin') return false;
   const plan = tenant.plan || 'trial';
   if (plan === 'free_comp') return false;
   if (plan === 'paid') return !ENTITLED_STATUSES.has(tenant.subscription_status);
