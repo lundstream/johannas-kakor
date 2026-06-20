@@ -14,15 +14,21 @@ export function AllergenLegend({ active }: Props) {
     );
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {active.map((code) => {
-        const meta = ALLERGENS.find((a) => a.code === code);
-        return (
-          <span key={code} className="chip chip-allergen" title={meta?.description}>
-            {code}
-          </span>
-        );
-      })}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {active.map((code) => {
+          const meta = ALLERGENS.find((a) => a.code === code);
+          return (
+            <span key={code} className="chip chip-allergen" title={meta?.description}>
+              {code}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-ink/50">
+        Hjälper dig att uppfylla allergenmärkningen – ingen garanti. Du ansvarar för att
+        kontrollera etiketten.
+      </p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type User } from '../api';
 import { useAuth } from '../hooks/useAuth';
+import { IngredientTagEditor } from '../components/IngredientTagEditor';
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -252,6 +253,12 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* Ingredient allergen tags */}
+        <section className="card p-4 lg:col-span-2">
+          <h2 className="mb-3 font-display text-base font-semibold">Allergenmärkning (ingredienser)</h2>
+          <IngredientTagEditor />
         </section>
       </main>
     </div>

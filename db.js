@@ -135,6 +135,99 @@ db.prepare(
    ON CONFLICT(key) DO UPDATE SET value = excluded.value`
 ).run(JSON.stringify(freeSlugs));
 
+// ---- Phase A: ingredient DB + allergen tags (idempotent) ----
+db.exec(`
+CREATE TABLE IF NOT EXISTS ingredients (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ingredient_allergens (
+  ingredient_id TEXT NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  PRIMARY KEY (ingredient_id, code)
+);
+`);
+
+function ingredientSlug(name) {
+  return (
+    'ing-' +
+    name
+      .toLowerCase()
+      .replace(/å/g, 'a')
+      .replace(/ä/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+  );
+}
+
+// Seed from the SAME ingredients.seed.json the frontend falls back to. Tags are
+// only seeded when the ingredient row is newly created, so admin edits survive restarts.
+try {
+  const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'ingredients.seed.json'), 'utf8'));
+  const insIngredient = db.prepare('INSERT OR IGNORE INTO ingredients(id, name, sort) VALUES (?, ?, ?)');
+  const insTag = db.prepare('INSERT OR IGNORE INTO ingredient_allergens(ingredient_id, code) VALUES (?, ?)');
+  const seedTx = db.transaction((items) => {
+    items.forEach((it, i) => {
+      const id = ingredientSlug(it.name);
+      const info = insIngredient.run(id, it.name, i);
+      if (info.changes > 0) for (const code of it.allergens || []) insTag.run(id, code);
+    });
+  });
+  if (Array.isArray(seed)) seedTx(seed);
+} catch (e) {
+  console.error('ingredient seed failed', e);
+}
+
+// ---- Phase A migration: rewrite stored label/template/custom blobs to Annex II ----
+// MANDEL -> NÖTTER (almond is part of group 8). SKALDJUR was ambiguous and is
+// dropped (surfaced for manual re-tag). Idempotent: a no-op once codes are gone.
+function migrateAllergenArray(arr) {
+  if (!Array.isArray(arr)) return null;
+  const out = [];
+  let changed = false;
+  for (const c of arr) {
+    if (c === 'MANDEL') { changed = true; if (!out.includes('NÖTTER')) out.push('NÖTTER'); }
+    else if (c === 'SKALDJUR') { changed = true; } // dropped — needs manual re-tag
+    else if (!out.includes(c)) out.push(c);
+  }
+  return changed ? out : null;
+}
+function migrateBlob(node) {
+  let changed = false;
+  if (Array.isArray(node)) {
+    for (const n of node) if (migrateBlob(n)) changed = true;
+  } else if (node && typeof node === 'object') {
+    if (Array.isArray(node.allergens)) {
+      const next = migrateAllergenArray(node.allergens);
+      if (next) { node.allergens = next; changed = true; }
+    }
+    for (const k of Object.keys(node)) if (migrateBlob(node[k])) changed = true;
+  }
+  return changed;
+}
+try {
+  const tables = [
+    { sel: 'SELECT user_id AS k, data FROM user_labels', upd: 'UPDATE user_labels SET data = ? WHERE user_id = ?' },
+    { sel: 'SELECT id AS k, data FROM user_templates', upd: 'UPDATE user_templates SET data = ? WHERE id = ?' },
+    { sel: 'SELECT user_id AS k, data FROM user_custom_ingredients', upd: 'UPDATE user_custom_ingredients SET data = ? WHERE user_id = ?' },
+  ];
+  let migrated = 0;
+  for (const t of tables) {
+    const upd = db.prepare(t.upd);
+    for (const row of db.prepare(t.sel).all()) {
+      try {
+        const data = JSON.parse(row.data);
+        if (migrateBlob(data)) { upd.run(JSON.stringify(data), row.k); migrated++; }
+      } catch { /* skip malformed */ }
+    }
+  }
+  if (migrated > 0) console.log(`[db] Annex II allergen migration rewrote ${migrated} blob(s)`);
+} catch (e) {
+  console.error('allergen blob migration failed', e);
+}
+
 export default db;
 
 export const queries = {
@@ -204,6 +297,13 @@ export const queries = {
     `INSERT INTO user_custom_ingredients(user_id, data, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
   ),
+
+  // ingredients (Phase A)
+  listIngredients: db.prepare('SELECT id, name FROM ingredients ORDER BY sort, name'),
+  listIngredientAllergens: db.prepare('SELECT ingredient_id, code FROM ingredient_allergens'),
+  getIngredient: db.prepare('SELECT id, name FROM ingredients WHERE id = ?'),
+  clearIngredientAllergens: db.prepare('DELETE FROM ingredient_allergens WHERE ingredient_id = ?'),
+  addIngredientAllergen: db.prepare('INSERT OR IGNORE INTO ingredient_allergens(ingredient_id, code) VALUES (?, ?)'),
 
   // app settings
   getAllSettings: db.prepare('SELECT key, value FROM app_settings'),

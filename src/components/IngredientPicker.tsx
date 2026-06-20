@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import type { Ingredient } from '../types';
 import { searchIngredients } from '../data/ingredients';
 import { detectAllergens } from '../data/allergens';
+import { useIngredients } from '../hooks/useIngredients';
 
 interface Props {
   customIngredients: Ingredient[];
@@ -15,9 +16,10 @@ export function IngredientPicker({ customIngredients, onAdd, onCreateCustom }: P
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
 
+  const base = useIngredients();
   const results = useMemo(
-    () => searchIngredients(query, customIngredients),
-    [query, customIngredients]
+    () => searchIngredients(query, base, customIngredients),
+    [query, base, customIngredients]
   );
 
   const trimmed = query.trim();

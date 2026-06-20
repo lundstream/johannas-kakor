@@ -26,6 +26,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
 # Backend source (no settings.json — config is injected via env at runtime).
 COPY server.js db.js auth.js email.js settings.js billing.js entitlements.js export.js ./
+COPY ingredients.seed.json ./
 # SQLite lives here; mount a volume at /app/data so it persists.
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node

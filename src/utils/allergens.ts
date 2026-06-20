@@ -55,18 +55,19 @@ export function tokenizeIngredient(ing: Ingredient): IngredientToken[] {
 const STEMS: { code: AllergenCode; stems: string[] }[] = [
   { code: 'GLUTEN', stems: ['gluten', 'vete', 'råg', 'korn', 'spelt', 'dinkel', 'durum', 'bulgur', 'mannagryn', 'havre'] },
   { code: 'MJÖLK', stems: ['mjölk', 'grädde', 'smör', 'ost', 'vassle', 'yoghurt', 'kvarg', 'fil', 'laktos', 'kasein'] },
+  { code: 'KRÄFTDJUR', stems: ['räka', 'krabba', 'hummer', 'kräfta', 'langust'] },
   { code: 'ÄGG', stems: ['ägg'] },
-  { code: 'MANDEL', stems: ['mandel', 'marsipan'] },
-  { code: 'NÖTTER', stems: ['hasselnöt', 'valnöt', 'cashew', 'pekannöt', 'paranöt', 'pistasch', 'macadamia', 'nöt'] },
-  { code: 'SOJA', stems: ['soja', 'tofu', 'edamame'] },
-  { code: 'SESAM', stems: ['sesam', 'tahini'] },
-  { code: 'JORDNÖTTER', stems: ['jordnöt'] },
   { code: 'FISK', stems: ['fisk', 'lax', 'torsk', 'sill', 'ansjovis', 'tonfisk', 'makrill'] },
-  { code: 'SKALDJUR', stems: ['räka', 'krabba', 'hummer', 'mussla', 'ostron', 'bläckfisk', 'skaldjur'] },
+  { code: 'JORDNÖTTER', stems: ['jordnöt'] },
+  { code: 'SOJA', stems: ['soja', 'tofu', 'edamame'] },
+  // NÖTTER includes almond/marzipan (Annex II group 8); emphasis uses the specific word.
+  { code: 'NÖTTER', stems: ['mandel', 'marsipan', 'hasselnöt', 'valnöt', 'cashew', 'pekannöt', 'paranöt', 'pistasch', 'pistage', 'macadamia', 'makadamia', 'nöt'] },
   { code: 'SELLERI', stems: ['selleri'] },
   { code: 'SENAP', stems: ['senap'] },
-  { code: 'LUPIN', stems: ['lupin'] },
+  { code: 'SESAM', stems: ['sesam', 'tahini'] },
   { code: 'SULFITER', stems: ['sulfit', 'svaveldioxid'] },
+  { code: 'LUPIN', stems: ['lupin'] },
+  { code: 'BLÖTDJUR', stems: ['mussla', 'ostron', 'bläckfisk', 'snäck', 'pilgrimsmussla'] },
 ];
 
 export function formatIngredient(ing: Ingredient): string {

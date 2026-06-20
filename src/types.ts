@@ -1,18 +1,23 @@
+/**
+ * The 14 allergen groups in Annex II of EU reg 1169/2011 (exactly these — no more).
+ * Order follows the regulation. Note: almond is part of NÖTTER (not its own group),
+ * and crustaceans/molluscs are distinct groups (KRÄFTDJUR / BLÖTDJUR).
+ */
 export type AllergenCode =
   | 'GLUTEN'
-  | 'MJÖLK'
+  | 'KRÄFTDJUR'
   | 'ÄGG'
-  | 'NÖTTER'
-  | 'MANDEL'
-  | 'SOJA'
-  | 'SESAM'
-  | 'JORDNÖTTER'
   | 'FISK'
-  | 'SKALDJUR'
+  | 'JORDNÖTTER'
+  | 'SOJA'
+  | 'MJÖLK'
+  | 'NÖTTER'
   | 'SELLERI'
   | 'SENAP'
+  | 'SESAM'
+  | 'SULFITER'
   | 'LUPIN'
-  | 'SULFITER';
+  | 'BLÖTDJUR';
 
 export interface Ingredient {
   id: string;

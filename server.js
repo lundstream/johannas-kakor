@@ -72,6 +72,28 @@ app.get('/api/public/site', (_req, res) => {
   });
 });
 
+/** The 14 Annex II allergen codes (1169/2011) — the only values accepted as tags. */
+const ALLERGEN_CODES = ['GLUTEN','KRÄFTDJUR','ÄGG','FISK','JORDNÖTTER','SOJA','MJÖLK','NÖTTER','SELLERI','SENAP','SESAM','SULFITER','LUPIN','BLÖTDJUR'];
+
+/** Build the ingredient list with their allergen tags. */
+function listIngredientsWithAllergens() {
+  const tagsById = new Map();
+  for (const t of queries.listIngredientAllergens.all()) {
+    if (!tagsById.has(t.ingredient_id)) tagsById.set(t.ingredient_id, []);
+    tagsById.get(t.ingredient_id).push(t.code);
+  }
+  return queries.listIngredients.all().map((i) => ({
+    id: i.id,
+    name: i.name,
+    allergens: tagsById.get(i.id) || [],
+  }));
+}
+
+/** Public: ingredient list + allergen tags (reference data; used by the editor incl. free mode). */
+app.get('/api/public/ingredients', (_req, res) => {
+  res.json({ ingredients: listIngredientsWithAllergens() });
+});
+
 // ---------- Auth ----------
 
 const emailSchema = z.string().trim().toLowerCase().email();
@@ -401,6 +423,22 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'last_admin' });
   }
   queries.deleteUser.run(id);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/ingredients', requireAdmin, (_req, res) => {
+  res.json({ ingredients: listIngredientsWithAllergens() });
+});
+
+app.put('/api/admin/ingredients/:id/allergens', requireAdmin, (req, res) => {
+  const schema = z.object({ allergens: z.array(z.enum(ALLERGEN_CODES)).max(14) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  if (!queries.getIngredient.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  queries.clearIngredientAllergens.run(req.params.id);
+  for (const code of [...new Set(parsed.data.allergens)]) {
+    queries.addIngredientAllergen.run(req.params.id, code);
+  }
   res.json({ ok: true });
 });
 
