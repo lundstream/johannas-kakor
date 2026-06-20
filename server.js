@@ -716,6 +716,34 @@ app.post('/api/admin/ingredients/:id/suggest-mapping', requireAdmin, async (req,
   });
 });
 
+// TESTING convenience: bulk auto-map every UNMAPPED ingredient to its best fuzzy
+// candidate (fuzzy-only for speed; no LLM). Deliberately auto-applies — meant for
+// seeding test data; the per-ingredient "Föreslå mappning" (Gemma) is the real,
+// human-confirmed pass. Never overwrites already-mapped ingredients.
+app.post('/api/admin/ingredients/auto-map', requireAdmin, (req, res) => {
+  if (nutritionMeta().count === 0) return res.status(409).json({ error: 'no_dataset' });
+  const names = queries.listNutritionNames.all();
+  const ings = queries.listIngredients.all();
+  let mapped = 0;
+  const skipped = [];
+  for (const ing of ings) {
+    if (ing.livsmedelsnummer) continue; // never clobber existing mappings
+    let best = null;
+    let bestScore = 0;
+    for (const c of names) {
+      const s = scoreMatch(ing.name, c.namn);
+      if (s > bestScore) { bestScore = s; best = c; }
+    }
+    if (best && bestScore >= 0.3) {
+      queries.setIngredientLivsmedelsnummer.run(best.livsmedelsnummer, ing.id);
+      mapped++;
+    } else {
+      skipped.push(ing.name);
+    }
+  }
+  res.json({ ok: true, mapped, skipped, total: ings.length });
+});
+
 // Re-importable Livsmedelsdatabas import (operator drops a CSV/JSON file first).
 app.post('/api/admin/nutrition/import', requireAdmin, (req, res) => {
   try {

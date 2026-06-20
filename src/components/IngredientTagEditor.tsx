@@ -47,15 +47,45 @@ export function IngredientTagEditor() {
 
   const loadMeta = () =>
     api.get<Meta>('/api/admin/nutrition/meta').then(setMeta).catch(() => {});
-
-  useEffect(() => {
-    void api
+  const loadItems = () =>
+    api
       .get<{ ingredients: Row[] }>('/api/admin/ingredients')
       .then((r) => setItems(r.ingredients ?? []))
       .catch(() => {})
       .finally(() => setLoaded(true));
+
+  useEffect(() => {
+    void loadItems();
     void loadMeta();
   }, []);
+
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
+  const autoMapAll = async () => {
+    if (
+      !window.confirm(
+        'TEST: fyll i livsmedelsnummer automatiskt för alla OMAPPADE ingredienser (bästa fuzzy-träff, ingen AI). Befintliga mappningar rörs inte. Bagaren bör granska efteråt. Fortsätt?',
+      )
+    )
+      return;
+    setAutoBusy(true);
+    setAutoMsg(null);
+    try {
+      const r = await api.post<{ mapped: number; skipped: string[]; total: number }>(
+        '/api/admin/ingredients/auto-map',
+        {},
+      );
+      setAutoMsg(
+        `Mappade ${r.mapped} av ${r.total}.` +
+          (r.skipped.length ? ` Utan träff: ${r.skipped.join(', ')}.` : ''),
+      );
+      await loadItems();
+    } catch {
+      setAutoMsg('Kunde inte auto-mappa.');
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -131,6 +161,17 @@ export function IngredientTagEditor() {
           </button>
         </div>
         {importMsg && <div className="mt-2 text-xs text-ink/70">{importMsg}</div>}
+
+        <div className="mt-3 border-t border-line pt-2">
+          <button type="button" className="btn text-xs" onClick={autoMapAll} disabled={autoBusy}>
+            {autoBusy ? 'Mappar…' : 'Föreslå & använd för alla (test)'}
+          </button>
+          <p className="mt-1 text-[11px] text-ink/45">
+            Testfunktion: fyller automatiskt i bästa fuzzy-träff för omappade ingredienser. Granska
+            per ingrediens med "Föreslå mappning" (AI) för säker mappning.
+          </p>
+          {autoMsg && <div className="mt-1 text-xs text-ink/70">{autoMsg}</div>}
+        </div>
       </div>
 
       <p className="text-[11px] text-ink/50">
