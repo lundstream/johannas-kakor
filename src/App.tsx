@@ -6,6 +6,7 @@ import AdminPage from './pages/AdminPage';
 import EditorPage from './pages/EditorPage';
 import FreeEditorPage from './pages/FreeEditorPage';
 import LandingPage from './pages/LandingPage';
+import ExportLabel from './pages/ExportLabel';
 import type { ReactNode } from 'react';
 
 function Loading() {
@@ -68,6 +69,8 @@ export default function App() {
             <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
             <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
             <Route path="/" element={<HomeRoute />} />
+            {/* Headless render target for server-side export (static path ranks above /:slug). */}
+            <Route path="/__export" element={<ExportLabel />} />
             <Route path="/:slug" element={<FreeRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

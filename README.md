@@ -84,6 +84,26 @@ stripe listen --forward-to localhost:3060/api/billing/webhook
 # klistra in den utskrivna whsec_… som STRIPE_WEBHOOK_SECRET i .env
 ```
 
+## Export & vattenmärkning (PDF/PNG)
+
+PDF- och PNG-export renderas **på servern** i headless Chromium (`puppeteer`),
+som laddar appens dolda `/__export`-route och fotograferar/skriver ut etiketten.
+Det gör att vattenmärket för icke-betalande konton bakas in i filen och **inte**
+kan tas bort i webbläsarens devtools.
+
+- **Vem vattenmärks?** Beslutas server-side: inloggade konton via `isWatermarked()`
+  (plan/prenumerationsstatus), anonyma gratisslugar via sluggens plan
+  (`prova` = trial → vattenmärks, `johanna` = free_comp → ren). En klient-flagga
+  litas aldrig på vid själva exporten.
+- **Termoutskrift** (`window.print()`) kan inte ske server-side; där bakas en liten
+  svensk fotnot in i etikettlayouten i stället (samma rad som i exporten).
+- **Live-förhandsvisningen vattenmärks aldrig.**
+
+Chromium laddas ned automatiskt när `npm install` kör. I produktion (Linux)
+krävs systembibliotek för Chromium. I utveckling serverar API:t inte SPA:t, så
+sätt `EXPORT_BASE_URL` till en körande build (t.ex. `http://localhost:3050`),
+annars används API:ts egen origin (som serverar `dist` i produktion).
+
 ## Skriva ut till termoskrivare
 
 1. Klicka **Skriv ut** (eller `Ctrl+P`).

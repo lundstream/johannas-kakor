@@ -472,8 +472,7 @@ export default function EditorPage() {
       </main>
 
       {/* Print/PDF roots — exact mm sizing */}
-      <PrintRoot label={label} copies={label.copies} />
-      <PdfRoot label={label} />
+      <PrintRoot label={label} copies={label.copies} watermark={!!user?.watermarked} />
 
       <footer className="border-t border-line bg-paper py-6">
         <div className="mx-auto flex max-w-[1400px] items-center justify-center gap-3 px-5 text-xs text-ink/50">
@@ -499,26 +498,13 @@ export default function EditorPage() {
   );
 }
 
-function PrintRoot({ label, copies }: { label: LabelData; copies: number }) {
+function PrintRoot({ label, copies, watermark }: { label: LabelData; copies: number; watermark: boolean }) {
   const items = Array.from({ length: Math.max(1, copies) });
   return (
     <div id="print-root" aria-hidden className="print-only">
       {items.map((_, i) => (
-        <LabelExact key={i} label={label} />
+        <LabelExact key={i} label={label} watermark={watermark} />
       ))}
-    </div>
-  );
-}
-
-function PdfRoot({ label }: { label: LabelData }) {
-  // Mounted off-screen for html2canvas to capture at exact mm size.
-  return (
-    <div
-      id="pdf-root"
-      aria-hidden
-      style={{ position: 'fixed', left: '-99999px', top: 0, opacity: 0, pointerEvents: 'none' }}
-    >
-      <LabelExact label={label} />
     </div>
   );
 }

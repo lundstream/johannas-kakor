@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { settings } from './settings.js';
 import { queries } from './db.js';
 import { createCheckoutSession, createPortalSession, handleWebhook } from './billing.js';
+import { isWatermarked } from './entitlements.js';
+import { renderLabel } from './export.js';
 import {
   authMiddleware,
   requireAuth,
@@ -153,9 +155,25 @@ function publicUser(u) {
     role: u.role,
     created_at: u.created_at,
     last_login_at: u.last_login_at,
-    // plan is safe to expose (drives an "uppgradera" nudge); stripe_* are NOT shipped.
+    // plan + watermarked are safe to expose (drive the print footer + an
+    // "uppgradera" nudge); stripe_* are NOT shipped. PDF/PNG enforcement is
+    // re-decided server-side at export time and never trusts a client flag.
     plan: u.plan || 'trial',
+    watermarked: isWatermarked(u),
   };
+}
+
+/** Authoritative watermark decision for an anonymous free-mode slug. */
+function slugIsWatermarked(slug) {
+  try {
+    const row = queries.getSetting.get('free_mode_slugs');
+    const slugs = JSON.parse(row?.value || '[]');
+    const match = Array.isArray(slugs) ? slugs.find((s) => s && s.slug === slug) : null;
+    if (!match) return true; // unknown / no slug → watermark (safe default)
+    return match.plan !== 'free_comp'; // trial → watermark; free_comp → clean
+  } catch {
+    return true;
+  }
 }
 
 // ---------- Billing ----------
@@ -180,6 +198,30 @@ app.post('/api/billing/portal', requireAuth, async (req, res) => {
     if (e.message === 'billing_not_configured') return res.status(503).json({ error: 'billing_not_configured' });
     console.error('portal error', e);
     res.status(500).json({ error: 'portal_failed' });
+  }
+});
+
+// ---------- Export (server-side render + watermark) ----------
+
+// Watermark is decided HERE, server-side: logged-in users by isWatermarked()
+// from their session; anonymous free-mode by the slug's server-side plan. A
+// client-supplied flag is never trusted.
+app.post('/api/export/:format', async (req, res) => {
+  const format = req.params.format === 'png' ? 'png' : 'pdf';
+  const { label, slug, transparent } = req.body || {};
+  if (!label || typeof label !== 'object' || !label.size || typeof label.size.widthMm !== 'number') {
+    return res.status(400).json({ error: 'invalid_label' });
+  }
+  const watermark = req.user ? isWatermarked(req.user) : slugIsWatermarked(slug);
+  const copies = Math.min(Math.max(1, Number(label.copies) || 1), 50);
+  try {
+    const buf = await renderLabel({ label, watermark, format, copies, transparent: !!transparent });
+    res.setHeader('Content-Type', format === 'png' ? 'image/png' : 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="etikett.${format}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error('export error', e);
+    res.status(500).json({ error: 'export_failed' });
   }
 });
 

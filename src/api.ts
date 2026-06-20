@@ -51,6 +51,9 @@ export interface User {
   role: 'user' | 'admin';
   created_at: number;
   last_login_at: number | null;
+  plan: 'trial' | 'free_comp' | 'paid';
+  /** Server-computed: whether this user's exports/prints are watermarked. */
+  watermarked: boolean;
 }
 
 export interface SiteConfig {

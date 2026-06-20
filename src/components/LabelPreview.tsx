@@ -37,19 +37,31 @@ export function LabelPreview({ label, scale = 3.4, className = '' }: Props) {
   );
 }
 
-/** Renders at exact mm dimensions for PDF/print. */
-export function LabelExact({ label }: { label: LabelData }) {
+/**
+ * Renders at exact mm dimensions for PDF/print.
+ * `watermark` bakes a small upgrade footer into the artifact (print + server
+ * PDF/PNG). The live preview never sets it, so the demo stays pristine.
+ */
+export function LabelExact({ label, watermark = false }: { label: LabelData; watermark?: boolean }) {
   return (
     <div
       className="label-print"
       style={{ width: `${label.size.widthMm}mm`, height: `${label.size.heightMm}mm` }}
     >
-      <LabelInner label={label} pxPerMm={3.7795275591} /* 1mm = 3.78px */ />
+      <LabelInner label={label} pxPerMm={3.7795275591} /* 1mm = 3.78px */ watermark={watermark} />
     </div>
   );
 }
 
-function LabelInner({ label, pxPerMm }: { label: LabelData; pxPerMm: number }) {
+function LabelInner({
+  label,
+  pxPerMm,
+  watermark = false,
+}: {
+  label: LabelData;
+  pxPerMm: number;
+  watermark?: boolean;
+}) {
   const allergenCodes = collectAllergens(label.ingredients);
 
   const w = label.size.widthMm;
@@ -111,6 +123,7 @@ function LabelInner({ label, pxPerMm }: { label: LabelData; pxPerMm: number }) {
         bodyPt={bodyPt}
         fields={fields}
         allergenCodes={allergenCodes}
+        watermark={watermark}
       />
     </div>
   );
@@ -129,6 +142,7 @@ function Layout({
   bodyPt,
   fields,
   allergenCodes,
+  watermark,
 }: {
   label: LabelData;
   pxPerMm: number;
@@ -138,6 +152,7 @@ function Layout({
   bodyPt: number;
   fields: Record<FieldKey, FieldStyle>;
   allergenCodes: ReturnType<typeof collectAllergens>;
+  watermark: boolean;
 }) {
   const variant = label.layout;
   const pos = label.logo.position;
@@ -337,9 +352,25 @@ function Layout({
         </div>
       </div>
 
-      {showCodes && (
-        <div className="mt-auto flex justify-end pt-[0.5mm]">
-          <CodesBlock label={label} pxPerMm={pxPerMm} />
+      {(showCodes || watermark) && (
+        <div className="mt-auto flex flex-col" style={{ gap: `${0.4 * pxPerMm}px` }}>
+          {showCodes && (
+            <div className="flex justify-end pt-[0.5mm]">
+              <CodesBlock label={label} pxPerMm={pxPerMm} />
+            </div>
+          )}
+          {watermark && (
+            <div
+              className="w-full text-center text-[#000]"
+              style={{
+                fontSize: `${(Math.max(5.5, metaPt * 0.85) * pxPerMm) / 2.83465}px`,
+                lineHeight: 1.1,
+                opacity: 0.9,
+              }}
+            >
+              Skapad med Enkel Etikett · enkeletikett.se
+            </div>
+          )}
         </div>
       )}
     </div>

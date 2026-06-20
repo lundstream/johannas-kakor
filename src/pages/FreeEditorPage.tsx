@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { v4 as uuid } from 'uuid';
 import type { Ingredient, LabelData, Template } from '../types';
 import { createBlankLabel, defaultFieldStyles, normalizeFieldOrder, PRESET_TEMPLATES } from '../data/templates';
@@ -30,6 +30,19 @@ const LS_CUSTOM = 'jk:customIngredients:v1';
 
 export default function FreeEditorPage() {
   const site = useSiteConfig();
+  const { slug } = useParams<{ slug: string }>();
+  // Best-effort watermark flag for the client-side print path; server re-decides
+  // authoritatively for PDF/PNG export based on this slug's plan.
+  const freeWatermark = useMemo(() => {
+    try {
+      const slugs = JSON.parse(site.free_mode_slugs || '[]');
+      const match = Array.isArray(slugs) ? slugs.find((s: { slug?: string }) => s && s.slug === slug) : null;
+      if (!match) return true; // unknown slug → watermark (safe)
+      return match.plan !== 'free_comp';
+    } catch {
+      return true;
+    }
+  }, [site.free_mode_slugs, slug]);
   const [label, setLabel] = useLocalStorage<LabelData>(LS_LABEL, createBlankLabel());
   const [templates, setTemplates] = useLocalStorage<Template[]>(LS_TEMPLATES, PRESET_TEMPLATES);
   const [customIngredients, setCustomIngredients] = useLocalStorage<Ingredient[]>(LS_CUSTOM, []);
@@ -82,8 +95,8 @@ export default function FreeEditorPage() {
     setLabel({ ...label, [key]: value });
 
   const handlePrint = () => printNow();
-  const handlePdf = async () => { try { await exportLabelsToPdf(label, label.copies); } catch (e) { console.error(e); alert('Kunde inte exportera PDF.'); } };
-  const handlePng = async () => { try { await exportLabelToPng(label, true); } catch (e) { console.error(e); alert('Kunde inte exportera PNG.'); } };
+  const handlePdf = async () => { try { await exportLabelsToPdf(label, label.copies, slug); } catch (e) { console.error(e); alert('Kunde inte exportera PDF.'); } };
+  const handlePng = async () => { try { await exportLabelToPng(label, true, slug); } catch (e) { console.error(e); alert('Kunde inte exportera PNG.'); } };
   const handleReset = () => { if (confirm('Återställ etikett till tom mall?')) setLabel(createBlankLabel()); };
 
   const saveTemplate = (name: string) => {
@@ -315,14 +328,11 @@ export default function FreeEditorPage() {
         </section>
       </main>
 
-      {/* Print/PDF roots */}
+      {/* Print root (window.print). PDF/PNG export is rendered server-side. */}
       <div id="print-root" aria-hidden className="print-only">
         {Array.from({ length: Math.max(1, label.copies) }).map((_, i) => (
-          <LabelExact key={i} label={label} />
+          <LabelExact key={i} label={label} watermark={freeWatermark} />
         ))}
-      </div>
-      <div id="pdf-root" aria-hidden style={{ position: 'fixed', left: '-99999px', top: 0, opacity: 0, pointerEvents: 'none' }}>
-        <LabelExact label={label} />
       </div>
 
       <footer className="border-t border-line bg-paper py-6">
