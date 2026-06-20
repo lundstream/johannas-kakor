@@ -192,6 +192,7 @@ function Layout({
   const showBakedDate = (fields.bakedDate?.visible ?? true) && !!label.bakedDate;
   const showStorage = fields.storage.visible && !!label.storage && variant !== 'minimal';
   const showExtra = fields.extraText.visible && !!label.extraText && variant === 'classic';
+  const showNutrition = (fields.nutrition?.visible ?? true) && !!label.nutrition?.perHundred;
 
   // Explicit text alignment if set; otherwise derive from logo position (back-compat).
   const align: 'left' | 'center' | 'right' =
@@ -337,6 +338,16 @@ function Layout({
         {label.extraText}
       </div>
     ) : null,
+    nutrition: showNutrition ? (
+      <div className="leading-[1.2] text-[#000]" style={fieldStyle('nutrition', bodyPt * 0.92)}>
+        <span className="font-semibold">Näringsvärde per 100 g: </span>
+        Energi {label.nutrition?.perHundred?.energiKj} kJ / {label.nutrition?.perHundred?.energiKcal} kcal,
+        fett {label.nutrition?.perHundred?.fett} g (varav mättat {label.nutrition?.perHundred?.mattatFett} g),
+        kolhydrat {label.nutrition?.perHundred?.kolhydrat} g (varav sockerarter{' '}
+        {label.nutrition?.perHundred?.sockerarter} g), protein {label.nutrition?.perHundred?.protein} g,
+        salt {label.nutrition?.perHundred?.salt} g.
+      </div>
+    ) : null,
   };
 
   const order = normalizeFieldOrder(label.fieldOrder);
@@ -398,20 +409,6 @@ function Layout({
           })}
         </div>
       </div>
-
-      {label.nutrition?.perHundred && (
-        <div
-          className="leading-[1.2] text-[#000]"
-          style={{ fontSize: `${(Math.max(5.5, bodyPt * 0.92) * pxPerMm) / 2.83465}px` }}
-        >
-          <span className="font-semibold">Näringsvärde per 100 g: </span>
-          Energi {label.nutrition.perHundred.energiKj} kJ / {label.nutrition.perHundred.energiKcal} kcal,
-          fett {label.nutrition.perHundred.fett} g (varav mättat {label.nutrition.perHundred.mattatFett} g),
-          kolhydrat {label.nutrition.perHundred.kolhydrat} g (varav sockerarter{' '}
-          {label.nutrition.perHundred.sockerarter} g), protein {label.nutrition.perHundred.protein} g,
-          salt {label.nutrition.perHundred.salt} g.
-        </div>
-      )}
 
       {(showCodes || watermark) && (
         <div className="mt-auto flex flex-col" style={{ gap: `${0.4 * pxPerMm}px` }}>

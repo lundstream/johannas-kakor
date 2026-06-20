@@ -18,6 +18,7 @@ const FIELD_LABELS: { key: FieldKey; label: string; hint?: string }[] = [
   { key: 'bestBefore', label: 'Bäst före' },
   { key: 'storage', label: 'Förvaring' },
   { key: 'extraText', label: 'Övrig text' },
+  { key: 'nutrition', label: 'Näringsvärde' },
 ];
 
 const FONTS: { value: '' | FontFamily; label: string }[] = [

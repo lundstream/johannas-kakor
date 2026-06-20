@@ -24,6 +24,7 @@ export function defaultFieldStyles(): Record<FieldKey, FieldStyle> {
     bestBefore: v,
     storage: v,
     extraText: v,
+    nutrition: v,
   };
 }
 
@@ -39,6 +40,7 @@ export const DEFAULT_FIELD_ORDER: FieldKey[] = [
   'meta',
   'ingredientsList',
   'allergenSeparate',
+  'nutrition',
   'bakedDate',
   'bestBefore',
   'storage',

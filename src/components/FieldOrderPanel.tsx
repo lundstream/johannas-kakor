@@ -32,6 +32,7 @@ const LABELS: Record<string, string> = {
   bestBefore: 'Bäst före',
   storage: 'Förvaring',
   extraText: 'Övrig text',
+  nutrition: 'Näringsvärde',
 };
 
 export function FieldOrderPanel({ order, fields, onChange }: Props) {

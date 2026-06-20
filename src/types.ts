@@ -62,7 +62,8 @@ export type FieldKey =
   | 'bakedDate'
   | 'bestBefore'
   | 'storage'
-  | 'extraText';
+  | 'extraText'
+  | 'nutrition';
 
 export interface FieldStyle {
   /** If false, hide this element completely. */
