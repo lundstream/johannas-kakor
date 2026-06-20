@@ -7,6 +7,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Field } from '../components/Field';
 import { LabelExact, LabelPreview } from '../components/LabelPreview';
 import { LegalLinks } from '../components/LegalPage';
+import { RecipePanel } from '../components/RecipePanel';
 import { IngredientPicker } from '../components/IngredientPicker';
 import { IngredientList } from '../components/IngredientList';
 import { LogoUploader } from '../components/LogoUploader';
@@ -74,6 +75,7 @@ export default function FreeEditorPage() {
       if (!Array.isArray(next.fieldOrder) || normOrder.length !== next.fieldOrder.length) {
         next.fieldOrder = normOrder; changed = true;
       }
+      if (!next.recipe || !Array.isArray(next.recipe.rows)) { next.recipe = { rows: [] }; changed = true; }
       return changed ? next : l;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +229,16 @@ export default function FreeEditorPage() {
                 <div className="mt-1.5"><AllergenLegend active={allergens} /></div>
               </div>
             </div>
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-3 font-display text-base font-semibold">Recept (mängdordning)</h2>
+            <RecipePanel
+              recipe={label.recipe ?? { rows: [] }}
+              onChange={(r) => updateLabel('recipe', r)}
+              customIngredients={customIngredients}
+              onApply={(ings) => updateLabel('ingredients', ings)}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

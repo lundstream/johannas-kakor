@@ -137,6 +137,33 @@ export interface LogoConfig {
   monochrome: boolean;
 }
 
+/** A sub-component of a compound recipe ingredient (one level; full recursive QUID is future work). */
+export interface RecipeComponent {
+  id: string;
+  name: string;
+  /** Mapped Phase A ingredient DB id, if matched. */
+  ingredientId?: string;
+  allergens?: AllergenCode[];
+}
+
+/** One row of a recipe: an ingredient (mapped or free text) + an entered quantity. */
+export interface RecipeRow {
+  id: string;
+  name: string;
+  /** Mapped Phase A ingredient DB id; absent = free text (no allergen data). */
+  ingredientId?: string;
+  allergens?: AllergenCode[];
+  /** Entered amount, in `unit`. v1 supports exact mass units only (g, kg). */
+  quantity: number;
+  unit: 'g' | 'kg';
+  /** Optional one-level breakdown into components (compound ingredient). */
+  components?: RecipeComponent[];
+}
+
+export interface RecipeConfig {
+  rows: RecipeRow[];
+}
+
 export interface LabelData {
   id: string;
   productName: string;
@@ -157,6 +184,8 @@ export interface LabelData {
   fields: Record<FieldKey, FieldStyle>;
   /** Order in which the (orderable) text blocks render on the label, top to bottom. */
   fieldOrder: FieldKey[];
+  /** Optional recipe that auto-generates the ingredient declaration in descending weight order. */
+  recipe: RecipeConfig;
   logo: LogoConfig;
   qr: QrConfig;
   barcode: BarcodeConfig;

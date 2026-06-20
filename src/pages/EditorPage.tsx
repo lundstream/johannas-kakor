@@ -18,6 +18,7 @@ import { TypographyPanel } from '../components/TypographyPanel';
 import { FieldStylePanel } from '../components/FieldStylePanel';
 import { FieldOrderPanel } from '../components/FieldOrderPanel';
 import { LegalLinks } from '../components/LegalPage';
+import { RecipePanel } from '../components/RecipePanel';
 import { collectAllergens } from '../utils/allergens';
 import { printNow } from '../utils/print';
 import { exportLabelsToPdf, exportLabelToPng } from '../utils/pdf';
@@ -94,6 +95,10 @@ export default function EditorPage() {
       const normOrder = normalizeFieldOrder(next.fieldOrder);
       if (!Array.isArray(next.fieldOrder) || normOrder.length !== next.fieldOrder.length) {
         next.fieldOrder = normOrder;
+        changed = true;
+      }
+      if (!next.recipe || !Array.isArray(next.recipe.rows)) {
+        next.recipe = { rows: [] };
         changed = true;
       }
       return changed ? next : l;
@@ -352,6 +357,16 @@ export default function EditorPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-3 font-display text-base font-semibold">Recept (mängdordning)</h2>
+            <RecipePanel
+              recipe={label.recipe ?? { rows: [] }}
+              onChange={(r) => updateLabel('recipe', r)}
+              customIngredients={customIngredients}
+              onApply={(ings) => updateLabel('ingredients', ings)}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

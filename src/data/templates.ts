@@ -95,6 +95,7 @@ export function createBlankLabel(): LabelData {
     },
     fields: defaultFieldStyles(),
     fieldOrder: [...DEFAULT_FIELD_ORDER],
+    recipe: { rows: [] },
     logo: { widthPercent: 30, position: 'top-left', monochrome: true },
     qr: { enabled: false, type: 'url', value: 'https://johannaskakor.se', sizeMm: 18 },
     barcode: { enabled: false, format: 'CODE128', value: '7350001234567', heightMm: 10 },
