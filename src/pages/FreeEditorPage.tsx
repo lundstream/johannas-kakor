@@ -132,7 +132,11 @@ export default function FreeEditorPage() {
       {/* Header */}
       <header className="border-b border-line bg-paper/80 backdrop-blur lg:sticky lg:top-0 z-30">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-5 py-3">
-          <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            aria-label={`${site.site_name || 'Enkel Etikett'} – till startsidan`}
+            className="flex items-center gap-3 rounded-xl transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+          >
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-paper">
               <span className="font-display text-lg font-bold">{(site.site_name || 'B')[0]}</span>
             </div>
@@ -142,7 +146,7 @@ export default function FreeEditorPage() {
                 {site.header_tagline}
               </div>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <Toolbar
               onPrint={handlePrint}
