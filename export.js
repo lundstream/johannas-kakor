@@ -1,5 +1,13 @@
 import puppeteer from 'puppeteer';
+import sharp from 'sharp';
 import { settings } from './settings.js';
+
+// Target raster resolution for the PNG (thermal printers are commonly 203/300 dpi).
+// We emit a native-DPI, pure 1-bit image so the printer has no grey to dither.
+const PRINT_DPI = 300;
+// Grey edges darker than this become solid black (slightly thickens thin text, which
+// reads better on thermal heads); lighter greys become white. 0=all white, 255=all black.
+const MONO_THRESHOLD = 190;
 
 // Where the headless browser loads the SPA's /__export route from.
 // In production the API serves the built SPA (dist) on its own origin, so this
@@ -40,12 +48,13 @@ export async function renderLabel({ label, watermark, format, copies = 1, transp
     // so force screen media to render the label normally.
     await page.emulateMediaType('screen');
 
-    // Inject the payload before any app script runs.
+    // Inject the payload before any app script runs. The PNG is for thermal printing,
+    // so it is never transparent — it renders on solid white and is thresholded below.
     await page.evaluateOnNewDocument(
       (payload) => {
         window.__EXPORT__ = payload;
       },
-      { label, watermark, copies: format === 'pdf' ? copies : 1, transparent: format === 'png' && transparent },
+      { label, watermark, copies: format === 'pdf' ? copies : 1, transparent: false },
     );
 
     await page.goto(`${EXPORT_BASE_URL}/__export`, { waitUntil: 'load', timeout: 30000 });
@@ -54,7 +63,21 @@ export async function renderLabel({ label, watermark, format, copies = 1, transp
     if (format === 'png') {
       const el = await page.$('.label-print');
       if (!el) throw new Error('label node not found');
-      return await el.screenshot({ type: 'png', omitBackground: transparent });
+      const raw = await el.screenshot({ type: 'png' }); // white background, anti-aliased
+      // Thermal-optimize: flatten on white, resample to the exact native-DPI pixel grid,
+      // then threshold to pure 1-bit black/white. Doing the threshold AFTER the resize
+      // means the final image carries no grey for the printer to dither, so text/barcodes
+      // print crisp. DPI metadata makes "print at actual size" land 1:1.
+      const wPx = Math.max(1, Math.round((label.size.widthMm / 25.4) * PRINT_DPI));
+      const hPx = Math.max(1, Math.round((label.size.heightMm / 25.4) * PRINT_DPI));
+      return await sharp(raw)
+        .flatten({ background: '#ffffff' })
+        .resize(wPx, hPx, { fit: 'fill', kernel: 'lanczos3' })
+        .grayscale()
+        .threshold(MONO_THRESHOLD)
+        .withMetadata({ density: PRINT_DPI })
+        .png({ compressionLevel: 9, palette: true, colors: 2 })
+        .toBuffer();
     }
 
     // PDF: exact mm page size; the label sits at the page top-left (Tailwind
