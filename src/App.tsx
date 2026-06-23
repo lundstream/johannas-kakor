@@ -82,6 +82,8 @@ export default function App() {
             <Route path="/integritetspolicy" element={<PrivacyPage />} />
             <Route path="/anvandarvillkor" element={<TermsPage />} />
             <Route path="/" element={<HomeRoute />} />
+            {/* Public start/landing page — reachable even when logged in (logo target). */}
+            <Route path="/start" element={<LandingPage />} />
             {/* Headless render target for server-side export (static path ranks above /:slug). */}
             <Route path="/__export" element={<ExportLabel />} />
             <Route path="/:slug" element={<FreeRoute />} />

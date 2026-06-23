@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { useAuth } from '../hooks/useAuth';
 import { LegalLinks } from '../components/LegalPage';
 import { GallerySection } from '../components/GallerySection';
 
@@ -16,6 +17,7 @@ const FREE_MODE_URL = '/prova';
 
 export default function LandingPage() {
   const site = useSiteConfig();
+  const { user } = useAuth();
   const name = site.site_name || 'Enkel Etikett';
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function LandingPage() {
       <header className="border-b border-line bg-paper/80 backdrop-blur sticky top-0 z-30">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
           <Link
-            to="/"
+            to="/start"
             aria-label={`${name} – till startsidan`}
             className="flex items-center gap-3 rounded-xl transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
           >
@@ -45,18 +47,29 @@ export default function LandingPage() {
             </div>
           </Link>
           <nav className="flex items-center gap-2" aria-label="Huvudmeny">
-            <Link
-              to="/login"
-              className="btn btn-ghost text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
-            >
-              Logga in
-            </Link>
-            <Link
-              to="/login"
-              className="btn btn-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
-            >
-              Skapa konto
-            </Link>
+            {user ? (
+              <Link
+                to="/"
+                className="btn btn-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+              >
+                Till editorn
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="btn btn-ghost text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                >
+                  Logga in
+                </Link>
+                <Link
+                  to="/login"
+                  className="btn btn-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                >
+                  Skapa konto
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -75,22 +88,35 @@ export default function LandingPage() {
               termoskrivare. Inget krångel, allt på svenska.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                to="/login"
-                className="btn btn-primary px-6 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
-              >
-                Skapa konto
-              </Link>
-              <Link
-                to={FREE_MODE_URL}
-                className="btn px-6 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
-              >
-                Prova gratis
-              </Link>
+              {user ? (
+                <Link
+                  to="/"
+                  className="btn btn-primary px-6 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                >
+                  Till editorn
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="btn btn-primary px-6 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                  >
+                    Skapa konto
+                  </Link>
+                  <Link
+                    to={FREE_MODE_URL}
+                    className="btn px-6 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                  >
+                    Prova gratis
+                  </Link>
+                </>
+              )}
             </div>
-            <p className="text-sm text-ink/50">
-              Inget kort krävs. Prova alla funktioner direkt i webbläsaren.
-            </p>
+            {!user && (
+              <p className="text-sm text-ink/50">
+                Inget kort krävs. Prova alla funktioner direkt i webbläsaren.
+              </p>
+            )}
           </div>
 
           {/* Dekorativ etikett-förhandsvisning */}
@@ -198,12 +224,23 @@ export default function LandingPage() {
         <section className="border-t border-line bg-ink text-paper">
           <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-5 py-16 text-center">
             <h2 className="font-display text-2xl font-semibold sm:text-3xl">
-              Redo att skapa dina första etiketter?
+              {user ? 'Tillbaka till dina etiketter' : 'Redo att skapa dina första etiketter?'}
             </h2>
             <p className="max-w-xl text-paper/70">
-              Börja gratis idag och uppgradera när du vill spara ditt arbete i molnet.
+              {user
+                ? 'Fortsätt där du slutade i editorn.'
+                : 'Börja gratis idag och uppgradera när du vill spara ditt arbete i molnet.'}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
+              {user ? (
+                <Link
+                  to="/"
+                  className="btn border-paper bg-paper px-6 py-3 text-base text-ink hover:bg-paper/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper/50"
+                >
+                  Till editorn
+                </Link>
+              ) : (
+              <>
               <Link
                 to="/login"
                 className="btn border-paper bg-paper px-6 py-3 text-base text-ink hover:bg-paper/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper/50"
@@ -216,6 +253,8 @@ export default function LandingPage() {
               >
                 Prova gratis
               </Link>
+              </>
+              )}
             </div>
           </div>
         </section>
